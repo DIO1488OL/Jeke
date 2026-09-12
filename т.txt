@@ -1,3 +1,137 @@
+import aiosqlite
+import os
+
+DB_PATH = os.path.join("dbs", "users_history.db")
+
+async def init_db():
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Таблица пользователей
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Таблица истории действий/запросов
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                query_text TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            )
+        """)
+        await db.commit()
+
+async def add_or_update_user(user_id: int, username: str, first_name: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO users (user_id, username, first_name)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username = excluded.username,
+                first_name = excluded.first_name
+        """, (user_id, username, first_name))
+        await db.commit()
+
+async def log_user_action(user_id: int, query_text: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO history (user_id, query_text)
+            VALUES (?, ?)
+        """, (user_id, query_text))
+        await db.commit()
+
+async def get_user_history(user_id: int, limit: int = 10):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("""
+            SELECT query_text, timestamp 
+            FROM history 
+            WHERE user_id = ? 
+            ORDER BY timestamp DESC 
+            LIMIT ?
+        """, (user_id, limit)) as cursor:
+            return await cursor.fetchall()
+import asyncio
+import logging
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+from config import BOT_TOKEN
+from modules.db_manager import init_db, add_or_update_user, log_user_action, get_user_history
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message):
+    user = message.from_user
+    await add_or_update_user(user.id, user.username, user.first_name)
+    await log_user_action(user.id, "/start")
+    await message.answer(f"Привет, {user.first_name}! Твой ID зарегистрирован.")
+
+@dp.message(Command("history"))
+async def cmd_history(message: types.Message):
+    history = await get_user_history(message.from_user.id)
+    if not history:
+        await message.answer("История запросов пуста.")
+        return
+    
+    response = "Последние действия:\n"
+    for item, timestamp in history:
+        response += f"• [{timestamp}] {item}\n"
+    
+    await message.answer(response)
+
+async def main():
+    await init_db()
+    logging.basicConfig(level=logging.INFO)
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main()) import os
+import sqlite3
+
+# Список директорий для создания
+DIRECTORIES = [
+    "modules",
+    "dbs",
+    "logs",
+    "cache",
+    "sessions_tg",
+    "exports",
+    "tmp",
+    "data",
+    "config"
+]
+
+# Базовые файлы проекта
+FILES = {
+    "main.py": "# Точка входа Telegram бота\n",
+    "config.py": "# Конфигурация проекта\n",
+    "requirements.txt": "aiogram>=3.0.0\naiosqlite>=0.19.0\npython-dotenv>=1.0.0\n",
+    ".env": "BOT_TOKEN=your_token_here\n",
+    "modules/__init__.py": "",
+    "modules/db_manager.py": "",
+    "modules/handlers.py": ""
+}
+
+def create_structure():
+    for folder in DIRECTORIES:
+        os.makedirs(folder, exist_ok=True)
+        print(f"[+] Папка готова: {folder}")
+
+    for file_path, content in FILES.items():
+        if not os.path.exists(file_path):
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            print(f"[+] Файл создан: {file_path}")
+
+if __name__ == "__main__":
+    create_structure()
+    print("\nСтруктура проекта успешно инициализирована.")
 Соедини это в 1 блок а не новый бот просто до. Этого ии подумало что я пишу нового бота хотя я просил новый блок который добавлю в бота а еще блоке должно быть 1.5к строчек
 Не забывай что мы не пишем с нуля код а пишем блок для добавления в код поэтому напиши блок с не код но добавив это
 """
